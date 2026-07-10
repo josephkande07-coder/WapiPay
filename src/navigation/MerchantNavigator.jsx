@@ -1,0 +1,69 @@
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator }     from '@react-navigation/stack';
+import { Ionicons }                 from '@expo/vector-icons';
+import { colors }                   from '../theme';
+
+import DashboardScreen              from '../screens/merchant/DashboardScreen';
+import MyShopScreen                 from '../screens/merchant/MyShopScreen';
+import AddProductScreen             from '../screens/merchant/AddProductScreen';
+import MerchantOrdersScreen         from '../screens/merchant/MerchantOrdersScreen';
+import WithdrawScreen               from '../screens/merchant/WithdrawScreen';
+import MerchantNotificationsScreen  from '../screens/merchant/MerchantNotificationsScreen';
+import ProfileScreen                from '../screens/shared/ProfileScreen';
+
+const Tab   = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+function DashboardStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DashboardMain"  component={DashboardScreen} />
+      <Stack.Screen name="Withdraw"       component={WithdrawScreen} />
+      <Stack.Screen name="Notifications"  component={MerchantNotificationsScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function ShopStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MyShopMain"  component={MyShopScreen} />
+      <Stack.Screen name="AddProduct"  component={AddProductScreen} />
+    </Stack.Navigator>
+  );
+}
+
+export default function MerchantNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.overlay,
+          borderTopColor:  colors.border,
+          borderTopWidth:  1,
+          paddingBottom:   8,
+          paddingTop:      6,
+          height:          62,
+        },
+        tabBarActiveTintColor:   colors.gold,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        tabBarIcon: ({ focused, color }) => {
+          let iconName;
+          if      (route.name === 'Dashboard')  iconName = focused ? 'stats-chart'  : 'stats-chart-outline';
+          else if (route.name === 'Boutique')   iconName = focused ? 'storefront'   : 'storefront-outline';
+          else if (route.name === 'Commandes')  iconName = focused ? 'cube'         : 'cube-outline';
+          else if (route.name === 'Parametres') iconName = focused ? 'settings'     : 'settings-outline';
+          return <Ionicons name={iconName} size={22} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Dashboard"  component={DashboardStack} />
+      <Tab.Screen name="Boutique"   component={ShopStack} />
+      <Tab.Screen name="Commandes"  component={MerchantOrdersScreen} />
+      <Tab.Screen name="Parametres" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
