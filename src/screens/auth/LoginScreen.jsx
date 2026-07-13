@@ -9,6 +9,7 @@ import { Ionicons }        from '@expo/vector-icons';
 import { useDispatch }     from 'react-redux';
 import { loginSuccess }    from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
+import api from '../../services/api';
 
 export default function LoginScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -27,11 +28,14 @@ export default function LoginScreen({ navigation }) {
       // TODO: remplacer par un vrai appel API
       // const res = await api.post('/auth/login', { phone, pin });
       // Pour test, on simule
-      await new Promise(r => setTimeout(r, 1500));
-      dispatch(loginSuccess({
-        token: 'mock-token-123',
-        user: { id: '1', fullName: 'Mireille K.', phone, role: 'buyer' },
-      }));
+      const response = await api.post('/auth/login', {
+  phone: '+243' + phone,
+  pin,
+});
+dispatch(loginSuccess({
+  token: response.token,
+  user:  response.user,
+}));
     } catch (e) {
       Alert.alert('Erreur', 'Numéro ou PIN incorrect.');
     } finally {

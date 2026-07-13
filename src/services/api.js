@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // ⚠️ Remplace par l'URL de ton backend déployé
-const BASE_URL = 'https://api.wapipay.cd/v1';
+const BASE_URL = 'http://192.168.1.145:3000/api';
 // Pour tester en local : 'http://192.168.X.X:3000/v1'
 
 const api = axios.create({

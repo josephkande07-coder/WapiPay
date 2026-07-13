@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
+import api from '../../services/api';
 
 const PIN_LENGTH = 6;
 
@@ -46,10 +47,15 @@ export default function SetPinScreen({ navigation, route }) {
       if (newConfirm.length === PIN_LENGTH) {
         if (newConfirm === pin) {
           // PIN confirmé → connexion automatique
-          dispatch(loginSuccess({
-            token: 'token-' + Date.now(),
-            user: { id: Date.now().toString(), fullName, phone, role: 'buyer' },
-          }));
+          const response = await api.post('/auth/register', {
+  phone,
+  fullName,
+  pin: finalPin,
+});
+dispatch(loginSuccess({
+  token: response.token,
+  user:  response.user,
+}));
         } else {
           shake();
           Alert.alert('PIN incorrect', 'Les deux PIN ne correspondent pas. Réessaie.');

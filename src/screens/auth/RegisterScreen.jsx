@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
+import api from '../../services/api';
 
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
@@ -24,8 +25,8 @@ export default function RegisterScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1500));
-      navigation.navigate('OTP', { phone: '+243' + phone, fullName });
+     await api.post('/auth/send-otp', { phone: '+243' + phone });
+navigation.navigate('OTP', { phone: '+243' + phone, fullName });
     } catch (e) {
       Alert.alert('Erreur', 'Une erreur est survenue. Réessaie.');
     } finally {
