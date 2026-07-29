@@ -1,112 +1,114 @@
-// src/services/api.js
-// 🔌 Service API — WapiPay Backend
-
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// ⚠️ Remplace par l'URL de ton backend déployé
 const BASE_URL = 'http://192.168.1.145:3000/api';
-// Pour tester en local : 'http://192.168.X.X:3000/v1'
+
+let authToken = null;
+
+export const loadToken = async () => {
+  try {
+    const token = await SecureStore.getItemAsync('wapipay_token');
+    if (token) authToken = token;
+  } catch (e) {
+    console.log('Erreur chargement token:', e);
+  }
+};
+
+export const saveToken = async (token) => {
+  try {
+    authToken = token;
+    await SecureStore.setItemAsync('wapipay_token', token);
+  } catch (e) {
+    console.log('Erreur sauvegarde token:', e);
+  }
+};
+
+export const removeToken = async () => {
+  try {
+    authToken = null;
+    await SecureStore.deleteItemAsync('wapipay_token');
+  } catch (e) {
+    console.log('Erreur suppression token:', e);
+  }
+};
 
 const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept':       'application/json',
-  },
+  headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
 });
 
-// ── Intercepteur : ajoute le token JWT automatiquement ──
-api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('wapipay_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// ── Intercepteur : gère les erreurs globalement ──
-api.interceptors.response.use(
-  response => response.data,
-  async (error) => {
-    if (error.response?.status === 401) {
-      // Token expiré → déconnexion
-      await SecureStore.deleteItemAsync('wapipay_token');
+api.interceptors.request.use(
+  async (config) => {
+    let token = authToken;
+    if (!token) {
+      try {
+        token = await SecureStore.getItemAsync('wapipay_token');
+        if (token) authToken = token;
+      } catch (e) {}
     }
+    if (token) config.headers.Authorization = 'Bearer ' + token;
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response.data,
+  async (error) => {
+    // On ne supprime plus le token automatiquement sur un 401 :
+    // une requete peut echouer avant que le token soit charge,
+    // ce n est pas forcement un vrai token invalide.
     return Promise.reject(error.response?.data || error);
   }
 );
 
-// ════════════════════════════════════════
-// AUTH
-// ════════════════════════════════════════
 export const authAPI = {
-  sendOTP:    (phone) => api.post('/auth/send-otp', { phone }),
-  verifyOTP:  (phone, otp) => api.post('/auth/verify-otp', { phone, otp }),
-  register:   (data) => api.post('/auth/register', data),
-  login:      (phone, pin) => api.post('/auth/login', { phone, pin }),
-  setPin:     (pin) => api.post('/auth/set-pin', { pin }),
+  sendOTP:   (phone)          => api.post('/auth/send-otp',   { phone }),
+  verifyOTP: (phone, otp)     => api.post('/auth/verify-otp', { phone, otp }),
+  register:  (data)           => api.post('/auth/register',   data),
+  login:     (phone, pin)     => api.post('/auth/login',      { phone, pin }),
+  setPin:    (pin)            => api.post('/auth/set-pin',    { pin }),
+  changePin: (oldPin, newPin) => api.post('/auth/change-pin', { oldPin, newPin }),
+  getMe:     ()                => api.get('/auth/me'),
+  updateMe:  (data)           => api.put('/auth/me', data),
 };
 
-// ════════════════════════════════════════
-// BOUTIQUES
-// ════════════════════════════════════════
 export const shopsAPI = {
-  getAll:       (params) => api.get('/shops', { params }),
-  getById:      (id) => api.get(`/shops/${id}`),
-  getFeatured:  () => api.get('/shops/featured'),
-  create:       (data) => api.post('/shops', data),
-  update:       (id, data) => api.put(`/shops/${id}`, data),
-  uploadIdDoc:  (formData) => api.post('/shops/kyc/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  getMyShop:    () => api.get('/shops/me'),
+  getAll:      (params) => api.get('/shops', { params }),
+  getFeatured: ()       => api.get('/shops/featured'),
+  getById:     (id)     => api.get('/shops/' + id),
+  getMyShop:   ()       => api.get('/shops/me'),
+  create:      (data)   => api.post('/shops', data),
+  update:      (id, d)  => api.put('/shops/' + id, d),
+  uploadKYC:   (data)   => api.post('/shops/kyc/upload', data),
+  getReviews:  (id)     => api.get('/shops/' + id + '/reviews'),
+  getProducts: (id)     => api.get('/shops/' + id + '/products'),
 };
 
-// ════════════════════════════════════════
-// PRODUITS
-// ════════════════════════════════════════
 export const productsAPI = {
-  getByShop:  (shopId) => api.get(`/shops/${shopId}/products`),
-  getById:    (id)     => api.get(`/products/${id}`),
-  create:     (data)   => api.post('/products', data),
-  update:     (id, d)  => api.put(`/products/${id}`, d),
-  delete:     (id)     => api.delete(`/products/${id}`),
-  search:     (q)      => api.get('/products/search', { params: { q } }),
+  search:  (params)   => api.get('/products/search', { params }),
+  getById: (id)       => api.get('/products/' + id),
+  create:  (data)     => api.post('/products', data),
+  update:  (id, data) => api.put('/products/' + id, data),
+  delete:  (id)       => api.delete('/products/' + id),
 };
 
-// ════════════════════════════════════════
-// COMMANDES
-// ════════════════════════════════════════
 export const ordersAPI = {
-  create:       (data) => api.post('/orders', data),
-  getMyOrders:  () => api.get('/orders/mine'),
-  getById:      (id)   => api.get(`/orders/${id}`),
-  getShopOrders:() => api.get('/orders/shop'),
-  updateStatus: (id, status) => api.put(`/orders/${id}/status`, { status }),
+  create:        (data)       => api.post('/orders', data),
+  getMyOrders:   ()           => api.get('/orders/mine'),
+  getShopOrders: ()           => api.get('/orders/shop'),
+  getShopStats:  (period)     => api.get('/orders/shop/stats', { params: { period } }),
+  getById:       (id)         => api.get('/orders/' + id),
+  updateStatus:  (id, status) => api.put('/orders/' + id + '/status', { status }),
+  addReview:     (id, data)   => api.post('/orders/' + id + '/review', data),
 };
 
-// ════════════════════════════════════════
-// PAIEMENTS
-// ════════════════════════════════════════
 export const paymentsAPI = {
-  initiate: (orderId, method, phone, pin) =>
-    api.post('/payments/initiate', { orderId, method, phone, pin }),
-  getStatus: (txnId) => api.get(`/payments/${txnId}/status`),
-  // Abonnement marchand
-  paySubscription: (shopId, plan, method, phone) =>
-    api.post('/payments/subscription', { shopId, plan, method, phone }),
-};
-
-// ════════════════════════════════════════
-// AVIS
-// ════════════════════════════════════════
-export const reviewsAPI = {
-  create:    (orderId, rating, comment) =>
-    api.post('/reviews', { orderId, rating, comment }),
-  getByShop: (shopId) => api.get(`/shops/${shopId}/reviews`),
+  initiate:        (data) => api.post('/payments/initiate', data),
+  getStatus:       (id)   => api.get('/payments/' + id + '/status'),
+  paySubscription: (data) => api.post('/payments/subscription', data),
+  withdraw:        (data) => api.post('/payments/withdraw', data),
 };
 
 export default api;
-

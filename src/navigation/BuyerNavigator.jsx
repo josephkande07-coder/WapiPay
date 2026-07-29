@@ -17,6 +17,9 @@ import OrdersScreen        from '../screens/buyer/OrdersScreen';
 import OrderTrackingScreen from '../screens/buyer/OrderTrackingScreen';
 import ReviewScreen        from '../screens/buyer/ReviewScreen';
 import ProfileScreen       from '../screens/shared/ProfileScreen';
+import EditProfileScreen   from '../screens/shared/EditProfileScreen';
+import ChangePinScreen     from '../screens/shared/ChangePinScreen';
+import InfoScreen          from '../screens/shared/InfoScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -24,9 +27,9 @@ const Stack = createStackNavigator();
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="HomeMain"  component={HomeScreen} />
-      <Stack.Screen name="Shop"      component={ShopScreen} />
-      <Stack.Screen name="Product"   component={ProductScreen} />
+      <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="Shop"     component={ShopScreen} />
+      <Stack.Screen name="Product"  component={ProductScreen} />
     </Stack.Navigator>
   );
 }
@@ -34,9 +37,9 @@ function HomeStack() {
 function CartStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="CartMain"  component={CartScreen} />
-      <Stack.Screen name="Checkout"  component={CheckoutScreen} />
-      <Stack.Screen name="Payment"   component={PaymentScreen} />
+      <Stack.Screen name="CartMain" component={CartScreen} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} />
+      <Stack.Screen name="Payment"  component={PaymentScreen} />
     </Stack.Navigator>
   );
 }
@@ -47,6 +50,19 @@ function OrdersStack() {
       <Stack.Screen name="OrdersMain"    component={OrdersScreen} />
       <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
       <Stack.Screen name="Review"        component={ReviewScreen} />
+    </Stack.Navigator>
+  );
+}
+
+// Le profil a maintenant son propre stack pour que
+// "Modifier mon profil", "Changer mon PIN" etc. menent vraiment quelque part
+function ProfileStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ProfileMain"  component={ProfileScreen} />
+      <Stack.Screen name="EditProfile"  component={EditProfileScreen} />
+      <Stack.Screen name="ChangePin"    component={ChangePinScreen} />
+      <Stack.Screen name="Info"         component={InfoScreen} />
     </Stack.Navigator>
   );
 }
@@ -91,7 +107,7 @@ export default function BuyerNavigator() {
         }}
       />
       <Tab.Screen name="Commandes" component={OrdersStack} />
-      <Tab.Screen name="Profil"    component={ProfileScreen} />
+      <Tab.Screen name="Profil"    component={ProfileStack} />
     </Tab.Navigator>
   );
 }

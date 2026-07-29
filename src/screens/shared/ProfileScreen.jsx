@@ -1,4 +1,3 @@
-// src/screens/shared/ProfileScreen.jsx
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,13 +7,13 @@ import { logout } from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
 
 const MENU_ITEMS = [
-  { icon: 'person-outline',       label: 'Modifier mon profil',    color: colors.bright },
-  { icon: 'lock-closed-outline',  label: 'Changer mon PIN',         color: colors.bright },
-  { icon: 'card-outline',         label: 'Mes méthodes de paiement',color: colors.bright },
-  { icon: 'notifications-outline',label: 'Notifications',           color: colors.bright },
-  { icon: 'help-circle-outline',  label: 'Aide & Support',          color: colors.bright },
-  { icon: 'shield-checkmark-outline', label: 'Sécurité',            color: colors.success },
-  { icon: 'document-text-outline',label: 'Conditions d\'utilisation',color: colors.muted },
+  { icon: 'person-outline',        label: 'Modifier mon profil',     color: colors.bright, route: 'EditProfile' },
+  { icon: 'lock-closed-outline',   label: 'Changer mon PIN',          color: colors.bright, route: 'ChangePin' },
+  { icon: 'card-outline',          label: 'Mes methodes de paiement', color: colors.bright, route: 'Info', params: { type: 'payment' } },
+  { icon: 'notifications-outline', label: 'Notifications',            color: colors.bright, route: 'Info', params: { type: 'notifications' } },
+  { icon: 'help-circle-outline',   label: 'Aide & Support',           color: colors.bright, route: 'Info', params: { type: 'help' } },
+  { icon: 'shield-checkmark-outline', label: 'Securite',              color: colors.success, route: 'Info', params: { type: 'security' } },
+  { icon: 'document-text-outline', label: 'Conditions d utilisation', color: colors.muted,   route: 'Info', params: { type: 'terms' } },
 ];
 
 export default function ProfileScreen({ navigation }) {
@@ -22,9 +21,9 @@ export default function ProfileScreen({ navigation }) {
   const { user } = useSelector(state => state.auth);
 
   const handleLogout = () => {
-    Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
+    Alert.alert('Deconnexion', 'Es-tu sur de vouloir te deconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Déconnexion', style: 'destructive', onPress: () => dispatch(logout()) },
+      { text: 'Deconnexion', style: 'destructive', onPress: () => dispatch(logout()) },
     ]);
   };
 
@@ -41,13 +40,17 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.userPhone}>{user?.phone || '+243 ...'}</Text>
           <View style={styles.verifiedRow}>
             <Ionicons name="shield-checkmark" size={14} color={colors.success} />
-            <Text style={styles.verifiedText}>Compte vérifié</Text>
+            <Text style={styles.verifiedText}>Compte {user?.isVerified ? 'verifie' : 'non verifie'}</Text>
           </View>
         </LinearGradient>
 
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, i) => (
-            <TouchableOpacity key={i} style={styles.menuItem}>
+            <TouchableOpacity
+              key={i}
+              style={styles.menuItem}
+              onPress={() => navigation.navigate(item.route, item.params)}
+            >
               <View style={[styles.menuIcon, { backgroundColor: item.color + '18' }]}>
                 <Ionicons name={item.icon} size={20} color={item.color} />
               </View>
@@ -59,10 +62,10 @@ export default function ProfileScreen({ navigation }) {
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color={colors.danger} />
-          <Text style={styles.logoutText}>Se déconnecter</Text>
+          <Text style={styles.logoutText}>Se deconnecter</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>WapiPay v1.0.0 · Kinshasa, RDC</Text>
+        <Text style={styles.version}>WapiPay v1.0.0 - Kinshasa, RDC</Text>
         <View style={{ height: 30 }} />
       </ScrollView>
     </View>

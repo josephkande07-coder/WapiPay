@@ -4,9 +4,10 @@ import {
   TouchableOpacity, TextInput, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { Ionicons }        from '@expo/vector-icons';
+import * as ImagePicker    from 'expo-image-picker';
 import { colors, radius, spacing } from '../../theme';
+import { productsAPI } from '../../services/api';
 
 const CATEGORIES = ['Mode','Tech','Alimentaire','Beaute','Maison','Sport','Autres'];
 
@@ -24,14 +25,24 @@ export default function AddProductScreen({ navigation }) {
       Alert.alert('Maximum', 'Tu peux ajouter au maximum 4 photos.');
       return;
     }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusee', 'Autorise WapiPay a acceder a ta galerie.');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.5,
+      base64: true,
     });
-    if (!result.canceled) {
-      setImages(prev => [...prev, result.assets[0].uri]);
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setImages(prev => [...prev, {
+        uri:    asset.uri,
+        base64: 'data:image/jpeg;base64,' + asset.base64,
+      }]);
     }
   };
 
@@ -40,14 +51,32 @@ export default function AddProductScreen({ navigation }) {
       Alert.alert('Maximum', 'Tu peux ajouter au maximum 4 photos.');
       return;
     }
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusee', 'Autorise WapiPay a utiliser la camera.');
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.5,
+      base64: true,
     });
-    if (!result.canceled) {
-      setImages(prev => [...prev, result.assets[0].uri]);
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setImages(prev => [...prev, {
+        uri:    asset.uri,
+        base64: 'data:image/jpeg;base64,' + asset.base64,
+      }]);
     }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert('Ajouter une photo', 'Choisis une option', [
+      { text: 'Prendre une photo', onPress: takePhoto },
+      { text: 'Depuis la galerie', onPress: pickImage },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
   };
 
   const removeImage = (index) => {
@@ -59,18 +88,22 @@ export default function AddProductScreen({ navigation }) {
       Alert.alert('Champs manquants', 'Nom, prix, stock et categorie sont obligatoires.');
       return;
     }
-    if (images.length === 0) {
-      Alert.alert('Photo requise', 'Ajoute au moins une photo du produit.');
-      return;
-    }
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1500));
+      // Appel reel au backend
+      await productsAPI.create({
+        name,
+        description,
+        price:    parseFloat(price),
+        stock:    parseInt(stock),
+        category,
+        images:   images.map(img => img.base64),
+      });
       Alert.alert('Produit ajoute !', '"' + name + '" est maintenant visible dans ta boutique.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e) {
-      Alert.alert('Erreur', 'Une erreur est survenue.');
+      Alert.alert('Erreur', e?.error || 'Impossible d ajouter le produit. Reessaie.');
     } finally {
       setLoading(false);
     }
@@ -88,28 +121,22 @@ export default function AddProductScreen({ navigation }) {
 
         <View style={styles.form}>
           <Text style={styles.sectionTitle}>Photos du produit</Text>
-          <Text style={styles.sectionSub}>Ajoute jusqu a 4 photos claires de ton produit</Text>
+          <Text style={styles.sectionSub}>Ajoute jusqu a 4 photos de ton produit (optionnel)</Text>
 
           <View style={styles.imagesRow}>
-            {images.map((uri, index) => (
+            {images.map((img, index) => (
               <View key={index} style={styles.imageWrap}>
-                <Image source={{ uri }} style={styles.productImage} />
+                <Image source={{ uri: img.uri }} style={styles.productImage} />
                 <TouchableOpacity style={styles.removeImg} onPress={() => removeImage(index)}>
                   <Ionicons name="close" size={12} color="#fff" />
                 </TouchableOpacity>
               </View>
             ))}
             {images.length < 4 && (
-              <View style={styles.addImgButtons}>
-                <TouchableOpacity style={styles.addImgBtn} onPress={takePhoto}>
-                  <Ionicons name="camera" size={22} color={colors.accent} />
-                  <Text style={styles.addImgText}>Photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.addImgBtn} onPress={pickImage}>
-                  <Ionicons name="image" size={22} color={colors.bright} />
-                  <Text style={styles.addImgText}>Galerie</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.addImgBtn} onPress={showImageOptions}>
+                <Ionicons name="camera" size={28} color={colors.muted} />
+                <Text style={styles.addImgText}>Ajouter</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -155,7 +182,6 @@ export default function AddProductScreen({ navigation }) {
             value={description}
             onChangeText={setDescription}
             multiline
-            numberOfLines={4}
           />
 
           <Text style={styles.label}>Categorie *</Text>
@@ -200,8 +226,7 @@ const styles = StyleSheet.create({
   imageWrap: { width: 90, height: 90, borderRadius: radius.lg, overflow: 'hidden', position: 'relative' },
   productImage: { width: '100%', height: '100%' },
   removeImg: { position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
-  addImgButtons: { gap: 6 },
-  addImgBtn: { width: 90, height: 40, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, backgroundColor: colors.card },
+  addImgBtn: { width: 90, height: 90, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.card },
   addImgText: { fontSize: 10, color: colors.muted, fontWeight: '600' },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: 6, marginTop: spacing.md },
   input: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 13, color: colors.text, fontSize: 14 },

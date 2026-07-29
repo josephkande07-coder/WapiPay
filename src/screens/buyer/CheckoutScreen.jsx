@@ -1,32 +1,66 @@
-// src/screens/buyer/CheckoutScreen.jsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, TextInput, Alert, ActivityIndicator,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useSelector } from 'react-redux';
+import { Ionicons }        from '@expo/vector-icons';
+import { useSelector }     from 'react-redux';
 import { selectCartTotal } from '../../store/slices/cartSlice';
 import { colors, radius, spacing } from '../../theme';
+import { ordersAPI } from '../../services/api';
 
 export default function CheckoutScreen({ navigation }) {
   const total    = useSelector(selectCartTotal);
   const items    = useSelector(state => state.cart.items);
+  const shopId   = useSelector(state => state.cart.shopId);
   const shopName = useSelector(state => state.cart.shopName);
-  const [address, setAddress] = useState('');
-  const [commune, setCommune] = useState('');
-  const [note,    setNote]    = useState('');
 
-  const platformFee  = Math.round(total * 0.015);
-  const deliveryFee  = 500;
-  const grandTotal   = total + deliveryFee + platformFee;
+  const [address,  setAddress]  = useState('');
+  const [commune,  setCommune]  = useState('');
+  const [note,     setNote]     = useState('');
+  const [loading,  setLoading]  = useState(false);
 
-  const handleConfirm = () => {
+  const platformFee = Math.round(total * 0.015);
+  const deliveryFee = 500;
+  const grandTotal  = total + deliveryFee + platformFee;
+
+  const handleConfirm = async () => {
     if (!address || !commune) {
-      alert('Indique ton adresse de livraison !');
+      Alert.alert('Adresse requise', 'Indique ton adresse de livraison !');
       return;
     }
-    navigation.navigate('Payment', {
-      order: { total: grandTotal, deliveryFee, platformFee, items, address, commune, shopName },
-    });
+    setLoading(true);
+    try {
+      // Creer la vraie commande dans la base de donnees
+      const orderItems = items.map(item => ({
+        productId: item.id,
+        quantity:  item.quantity,
+      }));
+
+      const res = await ordersAPI.create({
+        shopId,
+        items:           orderItems,
+        deliveryAddress: address + ', ' + commune + (note ? ' (' + note + ')' : ''),
+      });
+
+      // Naviguer vers le paiement avec la vraie commande
+      navigation.navigate('Payment', {
+        order: {
+          id:          res.order.id,
+          total:       grandTotal,
+          deliveryFee,
+          platformFee,
+          items,
+          shopName,
+          address:     address + ', ' + commune,
+        },
+      });
+    } catch (e) {
+      Alert.alert('Erreur', e?.error || 'Impossible de creer la commande. Reessaie.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,27 +75,58 @@ export default function CheckoutScreen({ navigation }) {
 
         {/* Adresse livraison */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📍 Adresse de livraison</Text>
-          <TextInput style={styles.input} placeholder="Adresse complète (av., n°, quartier...)" placeholderTextColor={colors.muted} value={address} onChangeText={setAddress} />
-          <TextInput style={[styles.input, { marginTop: 10 }]} placeholder="Commune (ex: Gombe, Lingwala...)" placeholderTextColor={colors.muted} value={commune} onChangeText={setCommune} />
-          <TextInput style={[styles.input, { marginTop: 10, height: 70 }]} placeholder="Note pour le livreur (optionnel)" placeholderTextColor={colors.muted} value={note} onChangeText={setNote} multiline />
+          <Text style={styles.sectionTitle}>Adresse de livraison</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Adresse complete (av., n, quartier...)"
+            placeholderTextColor={colors.muted}
+            value={address}
+            onChangeText={setAddress}
+          />
+          <TextInput
+            style={[styles.input, { marginTop: 10 }]}
+            placeholder="Commune (ex: Gombe, Lingwala...)"
+            placeholderTextColor={colors.muted}
+            value={commune}
+            onChangeText={setCommune}
+          />
+          <TextInput
+            style={[styles.input, { marginTop: 10, height: 70, textAlignVertical: 'top' }]}
+            placeholder="Note pour le livreur (optionnel)"
+            placeholderTextColor={colors.muted}
+            value={note}
+            onChangeText={setNote}
+            multiline
+          />
         </View>
 
-        {/* Récapitulatif */}
+        {/* Recapitulatif */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📦 Récapitulatif ({items.length} article{items.length > 1 ? 's' : ''})</Text>
+          <Text style={styles.sectionTitle}>
+            Recapitulatif ({items.length} article{items.length > 1 ? 's' : ''})
+          </Text>
           {items.map(item => (
             <View key={item.id} style={styles.orderItem}>
               <Text style={styles.orderItemName}>{item.name} x{item.quantity}</Text>
-              <Text style={styles.orderItemPrice}>{(item.price * item.quantity).toLocaleString()} CDF</Text>
+              <Text style={styles.orderItemPrice}>
+                {(item.price * item.quantity).toLocaleString()} CDF
+              </Text>
             </View>
           ))}
           <View style={styles.divider} />
-          <View style={styles.orderItem}><Text style={styles.orderItemName}>Livraison</Text><Text style={styles.orderItemPrice}>{deliveryFee} CDF</Text></View>
-          <View style={styles.orderItem}><Text style={styles.orderItemName}>Frais service (1.5%)</Text><Text style={styles.orderItemPrice}>{platformFee} CDF</Text></View>
+          <View style={styles.orderItem}>
+            <Text style={styles.orderItemName}>Livraison</Text>
+            <Text style={styles.orderItemPrice}>{deliveryFee} CDF</Text>
+          </View>
+          <View style={styles.orderItem}>
+            <Text style={styles.orderItemName}>Frais service (1.5%)</Text>
+            <Text style={styles.orderItemPrice}>{platformFee} CDF</Text>
+          </View>
           <View style={styles.divider} />
           <View style={styles.orderItem}>
-            <Text style={[styles.orderItemName, { fontWeight: '800', color: colors.text }]}>TOTAL</Text>
+            <Text style={[styles.orderItemName, { fontWeight: '800', color: colors.text }]}>
+              TOTAL
+            </Text>
             <Text style={styles.grandTotal}>{grandTotal.toLocaleString()} CDF</Text>
           </View>
         </View>
@@ -69,10 +134,17 @@ export default function CheckoutScreen({ navigation }) {
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        <TouchableOpacity onPress={handleConfirm} style={styles.payBtn}>
+        <TouchableOpacity onPress={handleConfirm} disabled={loading} style={styles.payBtn}>
           <LinearGradient colors={[colors.accent, colors.bright]} style={styles.payBtnGrad}>
-            <Ionicons name="lock-closed" size={18} color="#fff" />
-            <Text style={styles.payBtnText}>Payer {grandTotal.toLocaleString()} CDF</Text>
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                  <Ionicons name="lock-closed" size={18} color="#fff" />
+                  <Text style={styles.payBtnText}>
+                    Payer {grandTotal.toLocaleString()} CDF
+                  </Text>
+                </>
+            }
           </LinearGradient>
         </TouchableOpacity>
       </View>

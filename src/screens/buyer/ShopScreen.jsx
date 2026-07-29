@@ -1,28 +1,39 @@
-// src/screens/buyer/ShopScreen.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, FlatList,
+  TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
 import { useDispatch }     from 'react-redux';
 import { addToCart }       from '../../store/slices/cartSlice';
 import { colors, radius, spacing } from '../../theme';
-
-const DEMO_PRODUCTS = [
-  { id: '1', name: 'Robe Ankara Premium', price: 8500,  emoji: '👗', stock: 10 },
-  { id: '2', name: 'Boubou Femme',        price: 12000, emoji: '👘', stock: 5  },
-  { id: '3', name: 'Chemise Wax',         price: 6500,  emoji: '👔', stock: 8  },
-  { id: '4', name: 'Chapeau Mode',        price: 3500,  emoji: '👒', stock: 15 },
-  { id: '5', name: 'Jupe Pagne',          price: 5500,  emoji: '👗', stock: 7  },
-  { id: '6', name: 'Ensemble Wax',        price: 18000, emoji: '👘', stock: 3  },
-];
+import { shopsAPI } from '../../services/api';
 
 export default function ShopScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const { shop } = route.params || { shop: { id: '1', name: 'Mode Kin', emoji: '👗', rating: 4.8, commune: 'Gombe', products: 127 } };
-  const [added, setAdded] = useState({});
+  const { shop: shopParam } = route.params || {};
+  const [shop,     setShop]     = useState(shopParam);
+  const [products, setProducts] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [added,    setAdded]    = useState({});
+
+  useEffect(() => {
+    loadShopData();
+  }, []);
+
+  const loadShopData = async () => {
+    try {
+      setLoading(true);
+      const res = await shopsAPI.getById(shopParam.id);
+      setShop(res.shop);
+      setProducts(res.shop?.products || []);
+    } catch (e) {
+      console.log('Erreur boutique:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddToCart = (product) => {
     dispatch(addToCart({ product, shopId: shop.id, shopName: shop.name }));
@@ -33,61 +44,77 @@ export default function ShopScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero boutique */}
         <LinearGradient colors={[colors.mid, colors.deep]} style={styles.hero}>
           <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.heroEmoji}>{shop.emoji}</Text>
           <View style={styles.heroInfo}>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✅ Boutique vérifiée</Text>
-            </View>
-            <Text style={styles.shopName}>{shop.name}</Text>
-            <Text style={styles.shopLoc}>📍 {shop.commune}, Kinshasa</Text>
+            {shop?.kycStatus === 'VERIFIED' && (
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>Boutique verifiee</Text>
+              </View>
+            )}
+            <Text style={styles.shopName}>{shop?.name}</Text>
+            <Text style={styles.shopLoc}>{shop?.address}, {shop?.commune}, Kinshasa</Text>
           </View>
         </LinearGradient>
 
-        {/* Stats */}
         <View style={styles.statsRow}>
-          <View style={styles.statItem}><Text style={styles.statVal}>{shop.rating}⭐</Text><Text style={styles.statLbl}>Note</Text></View>
+          <View style={styles.statItem}><Text style={styles.statVal}>{shop?.rating || 0}</Text><Text style={styles.statLbl}>Note</Text></View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}><Text style={styles.statVal}>{shop.products}</Text><Text style={styles.statLbl}>Produits</Text></View>
+          <View style={styles.statItem}><Text style={styles.statVal}>{products.length}</Text><Text style={styles.statLbl}>Produits</Text></View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}><Text style={styles.statVal}>2.3k</Text><Text style={styles.statLbl}>Ventes</Text></View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}><Text style={styles.statVal}>~1h</Text><Text style={styles.statLbl}>Livraison</Text></View>
+          <View style={styles.statItem}><Text style={styles.statVal}>{shop?.totalSales || 0}</Text><Text style={styles.statLbl}>Ventes</Text></View>
         </View>
 
-        {/* Produits */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Tous les produits</Text>
         </View>
-        <View style={styles.productsGrid}>
-          {DEMO_PRODUCTS.map(product => (
-            <TouchableOpacity
-              key={product.id}
-              style={styles.productCard}
-              onPress={() => navigation.navigate('Product', { product, shop })}
-            >
-              <LinearGradient colors={[colors.mid, colors.deep]} style={styles.productImg}>
-                <Text style={styles.productEmoji}>{product.emoji}</Text>
-              </LinearGradient>
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-                <Text style={styles.productPrice}>{product.price.toLocaleString()} CDF</Text>
-                <TouchableOpacity
-                  style={[styles.addBtn, added[product.id] && styles.addBtnDone]}
-                  onPress={() => handleAddToCart(product)}
-                >
-                  <Text style={styles.addBtnText}>
-                    {added[product.id] ? '✓ Ajouté !' : '+ Panier'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginVertical: 40 }} />
+        ) : products.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyEmoji}>📦</Text>
+            <Text style={styles.emptyText}>Aucun produit pour l instant</Text>
+          </View>
+        ) : (
+          <View style={styles.productsGrid}>
+            {products.map(product => (
+              <TouchableOpacity
+                key={product.id}
+                style={styles.productCard}
+                onPress={() => navigation.navigate('Product', { product, shop })}
+              >
+                <View style={styles.productImgWrap}>
+                  {product.images && product.images[0] ? (
+                    <Image
+                      source={{ uri: product.images[0] }}
+                      style={styles.productImg}
+                    />
+                  ) : (
+                    <LinearGradient colors={[colors.mid, colors.deep]} style={styles.productImgPlaceholder}>
+                      <Text style={styles.productEmoji}>📦</Text>
+                    </LinearGradient>
+                  )}
+                </View>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
+                  <Text style={styles.productPrice}>{product.price?.toLocaleString()} CDF</Text>
+                  <Text style={styles.productStock}>Stock : {product.stock}</Text>
+                  <TouchableOpacity
+                    style={[styles.addBtn, added[product.id] && styles.addBtnDone]}
+                    onPress={() => handleAddToCart(product)}
+                  >
+                    <Text style={styles.addBtnText}>
+                      {added[product.id] ? 'Ajoute !' : '+ Panier'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={{ height: 30 }} />
       </ScrollView>
     </View>
@@ -98,7 +125,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy },
   hero: { height: 180, justifyContent: 'flex-end', padding: spacing.lg, position: 'relative' },
   back: { position: 'absolute', top: 52, left: spacing.lg, width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
-  heroEmoji: { position: 'absolute', top: 20, right: 20, fontSize: 60, opacity: 0.4 },
   heroInfo: {},
   verifiedBadge: { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: colors.success, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 6 },
   verifiedText: { fontSize: 10, fontWeight: '700', color: '#000' },
@@ -113,12 +139,18 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   productsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, gap: 12 },
   productCard: { width: '47%', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, overflow: 'hidden' },
-  productImg: { height: 100, alignItems: 'center', justifyContent: 'center' },
-  productEmoji: { fontSize: 40 },
+  productImgWrap: { height: 100 },
+  productImg: { width: '100%', height: '100%' },
+  productImgPlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  productEmoji: { fontSize: 38 },
   productInfo: { padding: 10 },
   productName: { fontSize: 12, fontWeight: '600', color: colors.text, marginBottom: 4, lineHeight: 16 },
   productPrice: { fontSize: 14, fontWeight: '800', color: colors.gold },
+  productStock: { fontSize: 10, color: colors.muted, marginTop: 2 },
   addBtn: { marginTop: 8, paddingVertical: 7, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center' },
   addBtnDone: { backgroundColor: colors.success },
   addBtnText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  emptyBox: { alignItems: 'center', paddingVertical: 60 },
+  emptyEmoji: { fontSize: 50, marginBottom: spacing.md },
+  emptyText: { color: colors.muted, fontSize: 13 },
 });

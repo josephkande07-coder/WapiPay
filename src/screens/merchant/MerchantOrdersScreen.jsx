@@ -1,44 +1,105 @@
-// src/screens/merchant/MerchantOrdersScreen.jsx
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList,
+  TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons }        from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
-
-const ALL_ORDERS = [
-  { id: '#4821', product: 'Robe Ankara x2',  client: 'Mireille K.', amount: 17000, status: 'new',      date: 'Auj. 14:32', phone: '+243 81 234 5678' },
-  { id: '#4820', product: 'Chemise Wax x1',  client: 'Jean-Paul M.',amount: 6500,  status: 'delivery', date: 'Auj. 10:15', phone: '+243 82 345 6789' },
-  { id: '#4819', product: 'Boubou Femme x1', client: 'Carine B.',   amount: 12000, status: 'done',     date: 'Hier 16:20', phone: '+243 83 456 7890' },
-  { id: '#4818', product: 'Robe Ankara x1',  client: 'Sandra M.',   amount: 8500,  status: 'done',     date: 'Hier 09:45', phone: '+243 84 567 8901' },
-];
+import { ordersAPI } from '../../services/api';
 
 const STATUS = {
-  new:      { label: 'Nouveau',       color: colors.bright,  bg: 'rgba(77,110,255,0.2)'  },
-  delivery: { label: 'En livraison',  color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
-  done:     { label: 'Livré ✓',      color: colors.success, bg: 'rgba(0,229,160,0.12)'  },
-  cancelled:{ label: 'Annulé',        color: colors.danger,  bg: 'rgba(255,77,109,0.1)'  },
+  PENDING:     { label: 'En attente',    color: colors.muted,   bg: colors.card },
+  CONFIRMED:   { label: 'Confirme',      color: colors.bright,  bg: 'rgba(77,110,255,0.2)' },
+  PICKUP:      { label: 'Recuperation',  color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  IN_DELIVERY: { label: 'En livraison',  color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  DELIVERED:   { label: 'Livre',         color: colors.success, bg: 'rgba(0,229,160,0.12)' },
+  CANCELLED:   { label: 'Annule',        color: colors.danger,  bg: 'rgba(255,77,109,0.1)' },
 };
 
-const TABS = ['Tous', 'Nouveaux', 'En livraison', 'Livrés'];
+const TABS = ['Tous', 'En attente', 'En livraison', 'Livres'];
 
 export default function MerchantOrdersScreen() {
-  const [activeTab, setActiveTab] = useState('Tous');
+  const [orders,      setOrders]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [activeTab,   setActiveTab]   = useState('Tous');
+  const [updatingId,  setUpdatingId]  = useState(null);
 
-  const filtered = ALL_ORDERS.filter(o => {
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const res = await ordersAPI.getShopOrders();
+      setOrders(res.orders || []);
+    } catch (e) {
+      console.log('Erreur commandes:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  }, []);
+
+  const handleUpdateStatus = async (orderId, newStatus) => {
+    setUpdatingId(orderId);
+    try {
+      await ordersAPI.updateStatus(orderId, newStatus);
+      setOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, status: newStatus } : o
+      ));
+    } catch (e) {
+      Alert.alert('Erreur', 'Impossible de mettre a jour le statut.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const confirmOrder = (orderId) => {
+    Alert.alert('Confirmer la commande', 'Confirmer cette commande ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Confirmer', onPress: () => handleUpdateStatus(orderId, 'CONFIRMED') },
+    ]);
+  };
+
+  const filtered = orders.filter(o => {
     if (activeTab === 'Tous') return true;
-    if (activeTab === 'Nouveaux') return o.status === 'new';
-    if (activeTab === 'En livraison') return o.status === 'delivery';
-    if (activeTab === 'Livrés') return o.status === 'done';
+    if (activeTab === 'En attente')   return ['PENDING', 'CONFIRMED'].includes(o.status);
+    if (activeTab === 'En livraison') return ['PICKUP', 'IN_DELIVERY'].includes(o.status);
+    if (activeTab === 'Livres')       return o.status === 'DELIVERED';
     return true;
   });
+
+  const newCount = orders.filter(o => o.status === 'PENDING').length;
+
+  const getProductName = (order) => {
+    if (order.items && order.items.length > 0) {
+      const first = order.items[0];
+      const name  = first.product?.name || 'Produit';
+      return name + (order.items.length > 1 ? ' +' + (order.items.length - 1) : '') + ' x' + first.quantity;
+    }
+    return 'Commande';
+  };
 
   return (
     <View style={styles.container}>
       <LinearGradient colors={[colors.deep, colors.navy]} style={styles.header}>
         <Text style={styles.headerTitle}>Commandes</Text>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{ALL_ORDERS.filter(o => o.status === 'new').length} nouvelles</Text>
-        </View>
+        {newCount > 0 && (
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{newCount} nouvelle{newCount > 1 ? 's' : ''}</Text>
+          </View>
+        )}
+        <TouchableOpacity onPress={loadOrders} style={styles.refreshBtn}>
+          <Ionicons name="refresh" size={20} color={colors.text} />
+        </TouchableOpacity>
       </LinearGradient>
 
       {/* Tabs */}
@@ -49,43 +110,90 @@ export default function MerchantOrdersScreen() {
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const s = STATUS[item.status];
-          return (
-            <TouchableOpacity style={styles.orderCard}>
-              <View style={styles.orderTop}>
-                <View>
-                  <Text style={styles.orderId}>{item.id}</Text>
-                  <Text style={styles.orderProduct}>{item.product}</Text>
-                  <Text style={styles.orderClient}>👤 {item.client}</Text>
-                  <Text style={styles.orderPhone}>{item.phone}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                  <Text style={styles.orderAmount}>{item.amount.toLocaleString()} CDF</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
-                    <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.accent]}
+              tintColor={colors.accent}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyEmoji}>📦</Text>
+              <Text style={styles.emptyText}>Aucune commande pour l instant</Text>
+              <Text style={styles.emptyHint}>Tirez vers le bas pour actualiser</Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const s = STATUS[item.status] || STATUS.PENDING;
+            return (
+              <View style={styles.orderCard}>
+                <View style={styles.orderTop}>
+                  <View>
+                    <Text style={styles.orderId}>#{item.id.slice(-6).toUpperCase()}</Text>
+                    <Text style={styles.orderProduct}>{getProductName(item)}</Text>
+                    <Text style={styles.orderClient}>{item.buyer?.fullName}</Text>
+                    <Text style={styles.orderPhone}>{item.buyer?.phone}</Text>
+                    <Text style={styles.orderAddress}>{item.deliveryAddress}</Text>
                   </View>
-                  <Text style={styles.orderDate}>{item.date}</Text>
+                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                    <Text style={styles.orderAmount}>
+                      {item.totalAmount?.toLocaleString()} CDF
+                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+                      <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+                    </View>
+                    <Text style={styles.orderDate}>
+                      {new Date(item.createdAt).toLocaleDateString('fr-FR')}
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Actions selon statut */}
+                {item.status === 'PENDING' && (
+                  <TouchableOpacity
+                    style={styles.confirmBtn}
+                    onPress={() => confirmOrder(item.id)}
+                    disabled={updatingId === item.id}
+                  >
+                    {updatingId === item.id
+                      ? <ActivityIndicator color={colors.success} size="small" />
+                      : <Text style={styles.confirmBtnText}>Confirmer la commande</Text>
+                    }
+                  </TouchableOpacity>
+                )}
+                {item.status === 'CONFIRMED' && (
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, { borderColor: 'rgba(255,184,48,0.3)', backgroundColor: 'rgba(255,184,48,0.08)' }]}
+                    onPress={() => handleUpdateStatus(item.id, 'IN_DELIVERY')}
+                    disabled={updatingId === item.id}
+                  >
+                    {updatingId === item.id
+                      ? <ActivityIndicator color={colors.gold} size="small" />
+                      : <Text style={[styles.confirmBtnText, { color: colors.gold }]}>Marquer en livraison</Text>
+                    }
+                  </TouchableOpacity>
+                )}
               </View>
-              {item.status === 'new' && (
-                <TouchableOpacity style={styles.confirmBtn}>
-                  <Text style={styles.confirmBtnText}>✓ Confirmer la commande</Text>
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-          );
-        }}
-      />
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -96,6 +204,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.text },
   headerBadge: { backgroundColor: colors.danger, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   headerBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
+  refreshBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   tabsRow: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: 8, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   tab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
   tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
@@ -108,10 +217,15 @@ const styles = StyleSheet.create({
   orderProduct: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 3 },
   orderClient: { fontSize: 12, color: colors.muted },
   orderPhone: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  orderAddress: { fontSize: 11, color: colors.muted, marginTop: 2, maxWidth: 180 },
   orderAmount: { fontSize: 16, fontWeight: '800', color: colors.gold },
   statusBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   statusText: { fontSize: 10, fontWeight: '700' },
   orderDate: { fontSize: 10, color: colors.muted },
   confirmBtn: { marginTop: spacing.md, padding: 10, backgroundColor: 'rgba(0,229,160,0.1)', borderRadius: radius.lg, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,229,160,0.3)' },
   confirmBtnText: { fontSize: 13, color: colors.success, fontWeight: '700' },
+  emptyBox: { alignItems: 'center', paddingTop: 80 },
+  emptyEmoji: { fontSize: 60, marginBottom: spacing.lg },
+  emptyText: { fontSize: 15, color: colors.muted },
+  emptyHint: { fontSize: 12, color: colors.muted, marginTop: 8 },
 });

@@ -12,17 +12,35 @@
       "backgroundColor": "#0A0F2C"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "WapiPay a besoin de ta camera pour prendre en photo ta piece d identite.",
+        "NSPhotoLibraryUsageDescription": "WapiPay a besoin d acceder a ta galerie pour uploader ta piece d identite."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0F2C"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "WapiPay a besoin d acceder a ta galerie.",
+          "cameraPermission": "WapiPay a besoin de ta camera."
+        }
+      ]
+    ]
   }
 }

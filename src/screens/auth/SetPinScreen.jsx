@@ -1,13 +1,13 @@
-// src/screens/auth/SetPinScreen.jsx
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useDispatch } from 'react-redux';
-import { loginSuccess } from '../../store/slices/authSlice';
+import { Ionicons }        from '@expo/vector-icons';
+import { useDispatch }     from 'react-redux';
+import { saveToken } from '../../services/api';
+import { loginSuccess }    from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
 import api from '../../services/api';
 
@@ -16,9 +16,9 @@ const PIN_LENGTH = 6;
 export default function SetPinScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const { phone, fullName } = route.params || {};
-  const [pin,     setPin]     = useState('');
+  const [pin,        setPin]        = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
-  const [step,    setStep]    = useState('create'); // 'create' | 'confirm'
+  const [step,       setStep]       = useState('create');
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const shake = () => {
@@ -30,7 +30,7 @@ export default function SetPinScreen({ navigation, route }) {
     ]).start();
   };
 
-  const handleKey = (key) => {
+  const handleKey = async (key) => {
     if (step === 'create') {
       if (key === 'del') { setPin(p => p.slice(0, -1)); return; }
       if (pin.length >= PIN_LENGTH) return;
@@ -46,19 +46,26 @@ export default function SetPinScreen({ navigation, route }) {
       setPinConfirm(newConfirm);
       if (newConfirm.length === PIN_LENGTH) {
         if (newConfirm === pin) {
-          // PIN confirmé → connexion automatique
-          const response = await api.post('/auth/register', {
-  phone,
-  fullName,
-  pin: finalPin,
-});
-dispatch(loginSuccess({
-  token: response.token,
-  user:  response.user,
-}));
+          try {
+            const response = await api.post('/auth/register', {
+              phone,
+              fullName,
+              pin: newConfirm,
+            });
+            await saveToken(response.token);
+            dispatch(loginSuccess({
+              token: response.token,
+              user:  response.user,
+            }));
+          } catch (e) {
+            Alert.alert('Erreur', e?.error || 'Inscription echouee. Reessaie.');
+            setPinConfirm('');
+            setPin('');
+            setStep('create');
+          }
         } else {
           shake();
-          Alert.alert('PIN incorrect', 'Les deux PIN ne correspondent pas. Réessaie.');
+          Alert.alert('PIN incorrect', 'Les deux PIN ne correspondent pas. Reessaie.');
           setPinConfirm('');
           setPin('');
           setStep('create');
@@ -82,23 +89,21 @@ dispatch(loginSuccess({
       </View>
 
       <Text style={styles.title}>
-        {step === 'create' ? 'Créer votre PIN' : 'Confirmer votre PIN'}
+        {step === 'create' ? 'Creer votre PIN' : 'Confirmer votre PIN'}
       </Text>
       <Text style={styles.subtitle}>
         {step === 'create'
-          ? 'Choisissez un code PIN à 6 chiffres\npour sécuriser votre compte'
+          ? 'Choisissez un code PIN a 6 chiffres\npour securiser votre compte'
           : 'Retapez votre PIN pour confirmer'
         }
       </Text>
 
-      {/* Points PIN */}
       <Animated.View style={[styles.pinDots, { transform: [{ translateX: shakeAnim }] }]}>
         {Array.from({ length: PIN_LENGTH }).map((_, i) => (
           <View key={i} style={[styles.pinDot, i < currentPin.length && styles.pinDotFilled]} />
         ))}
       </Animated.View>
 
-      {/* Pavé numérique */}
       <View style={styles.numpad}>
         {['1','2','3','4','5','6','7','8','9','','0','del'].map((key, idx) => (
           <TouchableOpacity
@@ -117,7 +122,7 @@ dispatch(loginSuccess({
 
       <View style={styles.secNote}>
         <Ionicons name="shield-checkmark" size={14} color={colors.success} />
-        <Text style={styles.secNoteText}>PIN chiffré et sécurisé sur votre appareil</Text>
+        <Text style={styles.secNoteText}>PIN chiffre et securise sur votre appareil</Text>
       </View>
     </LinearGradient>
   );

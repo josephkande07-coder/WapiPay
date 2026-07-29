@@ -30,7 +30,7 @@ export default function RootNavigator() {
           <Stack.Screen name="SetPin" component={SetPinScreen} />
           <Stack.Screen name="MerchantRegister" component={MerchantRegister} />
         </>
-      ) : role === 'merchant' ? (
+      ) : role === 'MERCHANT' ? (
         <Stack.Screen name="MerchantApp" component={MerchantNavigator} />
       ) : (
         <Stack.Screen name="BuyerApp"    component={BuyerNavigator} />

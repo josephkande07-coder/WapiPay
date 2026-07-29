@@ -1,55 +1,70 @@
-// src/screens/buyer/HomeScreen.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, TextInput, FlatList, Image,
+  TouchableOpacity, TextInput, ActivityIndicator, Image,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
 import { useSelector }     from 'react-redux';
 import { colors, radius, spacing } from '../../theme';
+import { shopsAPI, productsAPI } from '../../services/api';
 
-// Données de démo (remplacer par appel API)
 const CATEGORIES = [
-  { id: '1', name: 'Mode',       emoji: '👗' },
-  { id: '2', name: 'Électronique', emoji: '📱' },
-  { id: '3', name: 'Alimentation', emoji: '🥩' },
-  { id: '4', name: 'Beauté',     emoji: '💄' },
-  { id: '5', name: 'Maison',     emoji: '🏠' },
-  { id: '6', name: 'Sport',      emoji: '⚽' },
-];
-
-const FEATURED_SHOPS = [
-  { id: '1', name: 'Mode Kin',    category: 'Mode',    rating: 4.8, emoji: '👗', commune: 'Gombe',    products: 127 },
-  { id: '2', name: 'TechHub KIN', category: 'Tech',    rating: 4.6, emoji: '📱', commune: 'Lingwala', products: 45  },
-  { id: '3', name: 'Marché Bio',  category: 'Food',    rating: 4.9, emoji: '🥩', commune: 'Kalamu',   products: 89  },
-  { id: '4', name: 'Beauté RDC',  category: 'Beauté',  rating: 4.7, emoji: '💄', commune: 'Lemba',    products: 63  },
-];
-
-const PRODUCTS = [
-  { id: '1', name: 'Robe Ankara Premium', price: 8500,  shopId: '1', shopName: 'Mode Kin',    emoji: '👗' },
-  { id: '2', name: 'Samsung Galaxy A14',  price: 95000, shopId: '2', shopName: 'TechHub KIN', emoji: '📱' },
-  { id: '3', name: 'Panier de légumes',   price: 1200,  shopId: '3', shopName: 'Marché Bio',  emoji: '🥦' },
-  { id: '4', name: 'Rouge à lèvres mat',  price: 2500,  shopId: '4', shopName: 'Beauté RDC',  emoji: '💄' },
-  { id: '5', name: 'Chemise Wax',         price: 6500,  shopId: '1', shopName: 'Mode Kin',    emoji: '👔' },
-  { id: '6', name: 'Casque Bluetooth',    price: 18000, shopId: '2', shopName: 'TechHub KIN', emoji: '🎧' },
+  { id: '1', name: 'Mode',        emoji: '👗' },
+  { id: '2', name: 'Tech',        emoji: '📱' },
+  { id: '3', name: 'Alimentaire', emoji: '🥩' },
+  { id: '4', name: 'Beaute',      emoji: '💄' },
+  { id: '5', name: 'Maison',      emoji: '🏠' },
+  { id: '6', name: 'Sport',       emoji: '⚽' },
 ];
 
 export default function HomeScreen({ navigation }) {
   const { user }   = useSelector(state => state.auth);
-  const [search, setSearch] = useState('');
+  const [search,   setSearch]   = useState('');
+  const [shops,    setShops]    = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading,  setLoading]  = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
 
   const firstName = user?.fullName?.split(' ')[0] || 'toi';
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [shopsRes, productsRes] = await Promise.all([
+        shopsAPI.getFeatured(),
+        productsAPI.search({}),
+      ]);
+      setShops(shopsRes.shops || []);
+      setProducts(productsRes.products || []);
+    } catch (e) {
+      console.log('Erreur chargement:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!search) return loadData();
+    try {
+      const res = await productsAPI.search({ q: search });
+      setProducts(res.products || []);
+    } catch (e) {
+      console.log('Erreur recherche:', e);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* ── En-tête ── */}
         <LinearGradient colors={[colors.deep, colors.navy]} style={styles.header}>
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.greeting}>Bonjour 👋</Text>
+              <Text style={styles.greeting}>Bonjour</Text>
               <Text style={styles.username}>{firstName}</Text>
             </View>
             <View style={styles.headerRight}>
@@ -62,8 +77,6 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
           </View>
-
-          {/* Barre de recherche */}
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={colors.muted} />
             <TextInput
@@ -72,29 +85,26 @@ export default function HomeScreen({ navigation }) {
               placeholderTextColor={colors.muted}
               value={search}
               onChangeText={setSearch}
+              onSubmitEditing={handleSearch}
             />
-            <TouchableOpacity style={styles.filterBtn}>
-              <Ionicons name="options-outline" size={18} color={colors.accent} />
-            </TouchableOpacity>
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearch(''); loadData(); }}>
+                <Ionicons name="close-circle" size={18} color={colors.muted} />
+              </TouchableOpacity>
+            )}
           </View>
         </LinearGradient>
 
-        {/* ── Bannière promo ── */}
-        <LinearGradient
-          colors={[colors.accent, '#0A2FD4']}
-          style={styles.banner}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        >
+        <LinearGradient colors={[colors.accent, '#0A2FD4']} style={styles.banner}>
           <View>
-            <Text style={styles.bannerTitle}>🎉 Boutiques vérifiées</Text>
-            <Text style={styles.bannerSub}>Achetez en toute confiance{'\n'}à Kinshasa</Text>
+            <Text style={styles.bannerTitle}>Boutiques verifiees</Text>
+            <Text style={styles.bannerSub}>Achetez en toute confiance a Kinshasa</Text>
           </View>
           <Text style={styles.bannerEmoji}>🛒</Text>
         </LinearGradient>
 
-        {/* ── Catégories ── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Catégories</Text>
+          <Text style={styles.sectionTitle}>Categories</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
           {CATEGORIES.map(cat => (
@@ -104,62 +114,76 @@ export default function HomeScreen({ navigation }) {
               onPress={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
             >
               <Text style={styles.catEmoji}>{cat.emoji}</Text>
-              <Text style={[styles.catName, activeCategory === cat.id && { color: '#fff' }]}>
-                {cat.name}
-              </Text>
+              <Text style={[styles.catName, activeCategory === cat.id && { color: '#fff' }]}>{cat.name}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* ── Boutiques en vedette ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Boutiques en vedette</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Voir tout →</Text></TouchableOpacity>
+          <TouchableOpacity><Text style={styles.seeAll}>Voir tout</Text></TouchableOpacity>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shopScroll}>
-          {FEATURED_SHOPS.map(shop => (
-            <TouchableOpacity
-              key={shop.id}
-              style={styles.shopCard}
-              onPress={() => navigation.navigate('Shop', { shop })}
-            >
-              <LinearGradient colors={[colors.mid, colors.deep]} style={styles.shopImgBg}>
-                <Text style={styles.shopEmoji}>{shop.emoji}</Text>
-              </LinearGradient>
-              <View style={styles.shopCardInfo}>
-                <Text style={styles.shopCardName}>{shop.name}</Text>
-                <Text style={styles.shopCardMeta}>⭐ {shop.rating} · {shop.products} produits</Text>
-                <Text style={styles.shopCardCommune}>📍 {shop.commune}</Text>
-              </View>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>✓</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
 
-        {/* ── Produits populaires ── */}
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shopScroll}>
+            {shops.length > 0 ? shops.map(shop => (
+              <TouchableOpacity
+                key={shop.id}
+                style={styles.shopCard}
+                onPress={() => navigation.navigate('Shop', { shop })}
+              >
+                <LinearGradient colors={[colors.mid, colors.deep]} style={styles.shopImgBg}>
+                  <Text style={styles.shopEmoji}>🏪</Text>
+                </LinearGradient>
+                <View style={styles.shopCardInfo}>
+                  <Text style={styles.shopCardName}>{shop.name}</Text>
+                  <Text style={styles.shopCardMeta}>{shop.rating} etoiles</Text>
+                  <Text style={styles.shopCardCommune}>{shop.commune}</Text>
+                </View>
+                <View style={styles.verifiedBadge}>
+                  <Text style={styles.verifiedText}>V</Text>
+                </View>
+              </TouchableOpacity>
+            )) : (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyText}>Aucune boutique pour l instant</Text>
+              </View>
+            )}
+          </ScrollView>
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Produits populaires</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Voir tout →</Text></TouchableOpacity>
+          <TouchableOpacity><Text style={styles.seeAll}>Voir tout</Text></TouchableOpacity>
         </View>
+
         <View style={styles.productsGrid}>
-          {PRODUCTS.map(product => (
+          {products.length > 0 ? products.map(product => (
             <TouchableOpacity
               key={product.id}
               style={styles.productCard}
-              onPress={() => navigation.navigate('Product', { product })}
+              onPress={() => navigation.navigate('Product', { product, shop: product.shop })}
             >
               <LinearGradient colors={[colors.mid, colors.deep]} style={styles.productImgBg}>
-                <Text style={styles.productEmoji}>{product.emoji}</Text>
+                {product.images && product.images[0] ? (
+                  <Image source={{ uri: product.images[0] }} style={styles.productRealImg} />
+                ) : (
+                  <Text style={styles.productEmoji}>📦</Text>
+                )}
               </LinearGradient>
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-                <Text style={styles.productPrice}>{product.price.toLocaleString()} CDF</Text>
-                <Text style={styles.productShop}>🏪 {product.shopName}</Text>
+                <Text style={styles.productPrice}>{product.price?.toLocaleString()} CDF</Text>
+                <Text style={styles.productShop}>{product.shop?.name}</Text>
               </View>
             </TouchableOpacity>
-          ))}
+          )) : !loading && (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>Aucun produit pour l instant</Text>
+            </View>
+          )}
         </View>
 
         <View style={{ height: 20 }} />
@@ -181,7 +205,6 @@ const styles = StyleSheet.create({
   avatarText:{ color:'#fff', fontWeight:'800', fontSize:16 },
   searchBar: { flexDirection:'row', alignItems:'center', backgroundColor:colors.card, borderWidth:1, borderColor:colors.border, borderRadius:radius.lg, paddingHorizontal:14, height:48, gap:10 },
   searchInput:{ flex:1, color:colors.text, fontSize:14 },
-  filterBtn: { width:32, height:32, borderRadius:10, backgroundColor:'rgba(26,58,255,0.15)', alignItems:'center', justifyContent:'center' },
   banner: { margin:spacing.lg, borderRadius:radius.xl, padding:spacing.lg, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   bannerTitle:{ color:'#fff', fontWeight:'800', fontSize:16, marginBottom:4 },
   bannerSub:  { color:'rgba(255,255,255,0.75)', fontSize:12, lineHeight:18 },
@@ -207,9 +230,12 @@ const styles = StyleSheet.create({
   productsGrid:{ flexDirection:'row', flexWrap:'wrap', paddingHorizontal:spacing.lg, gap:12 },
   productCard: { width:'47%', backgroundColor:colors.card, borderWidth:1, borderColor:colors.border, borderRadius:radius.xl, overflow:'hidden' },
   productImgBg:{ height:100, alignItems:'center', justifyContent:'center' },
+  productRealImg:{ width:'100%', height:'100%' },
   productEmoji:{ fontSize:38 },
   productInfo: { padding:10 },
   productName: { fontSize:12, fontWeight:'600', color:colors.text, marginBottom:4, lineHeight:16 },
-  productPrice:{ fontSize:14, fontWeight:'800', color:colors.gold, fontFamily:'System' },
+  productPrice:{ fontSize:14, fontWeight:'800', color:colors.gold },
   productShop: { fontSize:10, color:colors.muted, marginTop:3 },
+  emptyBox:   { padding:spacing.xl, alignItems:'center' },
+  emptyText:  { color:colors.muted, fontSize:13 },
 });
