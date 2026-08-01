@@ -25,9 +25,16 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing,  setRefreshing]  = useState(false);
   const [period,      setPeriod]      = useState('week');
 
+  // ═══ CORRECTION ═══
+  // Avant, les donnees n etaient chargees qu au premier montage.
+  // Le listener 'focus' recharge maintenant a chaque retour sur cet
+  // onglet, pour que le badge "nouvelles commandes" et les stats
+  // restent synchronises avec les vraies commandes en base.
   useEffect(() => {
     loadData();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', loadData);
+    return unsubscribe;
+  }, [navigation]);
 
   useEffect(() => {
     loadStats(period);

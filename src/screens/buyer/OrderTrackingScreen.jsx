@@ -1,30 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
+import { ordersAPI } from '../../services/api';
+
+const STATUS_ORDER = ['PENDING', 'CONFIRMED', 'PICKUP', 'IN_DELIVERY', 'DELIVERED'];
 
 const STEPS = [
-  { id: 1, label: 'Commande confirmee',  icon: 'checkmark-circle', desc: 'Le marchand a recu ta commande' },
-  { id: 2, label: 'En preparation',      icon: 'cube',             desc: 'Le marchand prepare ton colis' },
-  { id: 3, label: 'Livreur en route',    icon: 'bicycle',          desc: 'Le livreur est en chemin vers la boutique' },
-  { id: 4, label: 'Colis recupere',      icon: 'bag-check',        desc: 'Le livreur a pris ton colis' },
-  { id: 5, label: 'Livraison en cours',  icon: 'navigate',         desc: 'Le livreur arrive chez toi' },
-  { id: 6, label: 'Livre',              icon: 'home',             desc: 'Commande livree avec succes !' },
+  { status: 'PENDING',     label: 'Commande confirmee', icon: 'checkmark-circle', desc: 'Le marchand a recu ta commande' },
+  { status: 'CONFIRMED',   label: 'En preparation',      icon: 'cube',             desc: 'Le marchand prepare ton colis' },
+  { status: 'PICKUP',      label: 'Livreur en route',    icon: 'bicycle',          desc: 'Le livreur recupere le colis chez le marchand' },
+  { status: 'IN_DELIVERY', label: 'Livraison en cours',  icon: 'navigate',         desc: 'Le livreur arrive chez toi' },
+  { status: 'DELIVERED',   label: 'Livre',               icon: 'home',             desc: 'Commande livree avec succes !' },
 ];
 
 export default function OrderTrackingScreen({ navigation, route }) {
-  const { order } = route.params || {
-    order: { id: '#4821', product: 'Robe Ankara x2', shop: 'Mode Kin', total: 17000 }
-  };
-  const [currentStep, setCurrentStep] = useState(3);
+  const { orderId } = route.params || {};
+  const [order,   setOrder]   = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadOrder = useCallback(async () => {
+    if (!orderId) return;
+    try {
+      const res = await ordersAPI.getById(orderId);
+      setOrder(res.order);
+    } catch (e) {
+      console.log('Erreur suivi commande:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentStep(s => s < 6 ? s + 1 : s);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
+    loadOrder();
+    // On rafraichit periodiquement pour voir la progression reelle
+    // mise a jour par le marchand, sans avoir besoin de websockets.
+    const interval = setInterval(loadOrder, 8000);
+    return () => clearInterval(interval);
+  }, [loadOrder]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: spacing.xl }]}>
+        <Text style={{ color: colors.muted, textAlign: 'center' }}>Commande introuvable.</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: spacing.lg }}>
+          <Text style={{ color: colors.accent }}>Retour</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const isCancelled  = order.status === 'CANCELLED';
+  const currentIndex = STATUS_ORDER.indexOf(order.status);
+  const productLabel = order.items?.length
+    ? order.items[0].product?.name + ' x' + order.items[0].quantity + (order.items.length > 1 ? ' +' + (order.items.length - 1) : '')
+    : 'Commande';
 
   return (
     <View style={styles.container}>
@@ -34,7 +73,7 @@ export default function OrderTrackingScreen({ navigation, route }) {
         </TouchableOpacity>
         <View>
           <Text style={styles.headerTitle}>Suivi commande</Text>
-          <Text style={styles.orderId}>{order.id}</Text>
+          <Text style={styles.orderId}>#{order.id.slice(-6).toUpperCase()}</Text>
         </View>
       </LinearGradient>
 
@@ -43,64 +82,65 @@ export default function OrderTrackingScreen({ navigation, route }) {
           <View style={styles.summaryRow}>
             <Ionicons name="cube-outline" size={18} color={colors.bright} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.summaryProduct}>{order.product}</Text>
-              <Text style={styles.summaryShop}>{order.shop}</Text>
+              <Text style={styles.summaryProduct}>{productLabel}</Text>
+              <Text style={styles.summaryShop}>{order.shop?.name}</Text>
             </View>
-            <Text style={styles.summaryTotal}>{order.total ? order.total.toLocaleString() : '0'} CDF</Text>
+            <Text style={styles.summaryTotal}>{order.totalAmount?.toLocaleString()} CDF</Text>
           </View>
         </View>
 
-        {currentStep >= 3 && (
-          <View style={styles.deliveryCard}>
-            <View style={styles.deliveryAvatar}>
-              <Text style={{ fontSize: 28 }}>🛵</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.deliveryLabel}>Votre livreur</Text>
-              <Text style={styles.deliveryName}>Patrick M.</Text>
-              <Text style={styles.deliveryRating}>4.9 etoiles - 234 livraisons</Text>
-            </View>
-            <TouchableOpacity style={styles.callBtn}>
-              <Ionicons name="call" size={20} color={colors.success} />
-            </TouchableOpacity>
+        {isCancelled ? (
+          <View style={styles.cancelledBox}>
+            <Ionicons name="close-circle" size={40} color={colors.danger} />
+            <Text style={styles.cancelledTitle}>Commande annulee</Text>
+            <Text style={styles.cancelledDesc}>Cette commande a ete annulee.</Text>
+          </View>
+        ) : (
+          <View style={styles.stepsSection}>
+            <Text style={styles.stepsTitle}>Progression</Text>
+            {STEPS.map((step, index) => {
+              const isDone   = index < currentIndex;
+              const isActive = index === currentIndex;
+              return (
+                <View key={step.status} style={styles.stepRow}>
+                  <View style={styles.stepLeft}>
+                    <View style={[styles.stepDot, isDone && styles.stepDotDone, isActive && styles.stepDotActive]}>
+                      {isDone
+                        ? <Ionicons name="checkmark" size={14} color="#fff" />
+                        : <Ionicons name={step.icon} size={14} color={isActive ? '#000' : colors.muted} />
+                      }
+                    </View>
+                    {index < STEPS.length - 1 && (
+                      <View style={[styles.stepLine, isDone && styles.stepLineDone]} />
+                    )}
+                  </View>
+                  <View style={[styles.stepContent, isActive && styles.stepContentActive]}>
+                    <Text style={[styles.stepLabel, isDone && styles.stepLabelDone, isActive && styles.stepLabelActive]}>
+                      {step.label}
+                    </Text>
+                    {(isDone || isActive) && <Text style={styles.stepDesc}>{step.desc}</Text>}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
-        <View style={styles.stepsSection}>
-          <Text style={styles.stepsTitle}>Progression</Text>
-          {STEPS.map((step, index) => {
-            const isDone    = step.id < currentStep;
-            const isActive  = step.id === currentStep;
-            return (
-              <View key={step.id} style={styles.stepRow}>
-                <View style={styles.stepLeft}>
-                  <View style={[styles.stepDot, isDone && styles.stepDotDone, isActive && styles.stepDotActive]}>
-                    {isDone
-                      ? <Ionicons name="checkmark" size={14} color="#fff" />
-                      : <Ionicons name={step.icon} size={14} color={isActive ? '#000' : colors.muted} />
-                    }
-                  </View>
-                  {index < STEPS.length - 1 && (
-                    <View style={[styles.stepLine, isDone && styles.stepLineDone]} />
-                  )}
-                </View>
-                <View style={[styles.stepContent, isActive && styles.stepContentActive]}>
-                  <Text style={[styles.stepLabel, isDone && styles.stepLabelDone, isActive && styles.stepLabelActive]}>
-                    {step.label}
-                  </Text>
-                  {(isDone || isActive) && (
-                    <Text style={styles.stepDesc}>{step.desc}</Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+        <View style={styles.addressCard}>
+          <Ionicons name="location" size={18} color={colors.danger} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.addressLabel}>Adresse de livraison</Text>
+            <Text style={styles.addressText}>{order.deliveryAddress}</Text>
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.supportBtn}>
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.bright} />
-          <Text style={styles.supportText}>Contacter le support WapiPay</Text>
-        </TouchableOpacity>
+        <View style={styles.honestNote}>
+          <Ionicons name="information-circle-outline" size={16} color={colors.muted} />
+          <Text style={styles.honestNoteText}>
+            L assignation d un livreur specifique n est pas encore disponible - le marchand gere la livraison directement pour l instant.
+          </Text>
+        </View>
+
         <View style={{ height: 30 }} />
       </ScrollView>
     </View>
@@ -118,12 +158,9 @@ const styles = StyleSheet.create({
   summaryProduct: { fontSize: 14, fontWeight: '700', color: colors.text },
   summaryShop: { fontSize: 12, color: colors.muted, marginTop: 2 },
   summaryTotal: { fontSize: 16, fontWeight: '800', color: colors.gold },
-  deliveryCard: { marginHorizontal: spacing.lg, marginBottom: spacing.lg, backgroundColor: 'rgba(0,229,160,0.08)', borderWidth: 1, borderColor: 'rgba(0,229,160,0.2)', borderRadius: radius.xl, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  deliveryAvatar: { width: 52, height: 52, borderRadius: 18, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  deliveryLabel: { fontSize: 11, color: colors.muted },
-  deliveryName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  deliveryRating: { fontSize: 11, color: colors.success, marginTop: 2 },
-  callBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(0,229,160,0.15)', alignItems: 'center', justifyContent: 'center' },
+  cancelledBox: { alignItems: 'center', padding: spacing.xl, marginHorizontal: spacing.lg, backgroundColor: 'rgba(255,77,109,0.08)', borderRadius: radius.xl, borderWidth: 1, borderColor: 'rgba(255,77,109,0.2)', marginBottom: spacing.lg },
+  cancelledTitle: { fontSize: 16, fontWeight: '700', color: colors.danger, marginTop: spacing.sm },
+  cancelledDesc: { fontSize: 12, color: colors.muted, marginTop: 4 },
   stepsSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
   stepsTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
   stepRow: { flexDirection: 'row', gap: 14, minHeight: 60 },
@@ -139,6 +176,9 @@ const styles = StyleSheet.create({
   stepLabelDone: { color: colors.text },
   stepLabelActive: { color: colors.gold, fontWeight: '800' },
   stepDesc: { fontSize: 11, color: colors.muted, marginTop: 3, lineHeight: 16 },
-  supportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: spacing.lg, padding: spacing.md, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border },
-  supportText: { fontSize: 13, color: colors.bright, fontWeight: '600' },
+  addressCard: { marginHorizontal: spacing.lg, marginBottom: spacing.md, flexDirection: 'row', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: spacing.md },
+  addressLabel: { fontSize: 11, color: colors.muted, marginBottom: 3 },
+  addressText: { fontSize: 13, fontWeight: '600', color: colors.text },
+  honestNote: { flexDirection: 'row', gap: 8, marginHorizontal: spacing.lg, padding: spacing.md, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  honestNoteText: { flex: 1, fontSize: 11, color: colors.muted, lineHeight: 16 },
 });

@@ -10,7 +10,7 @@ const MENU_ITEMS = [
   { icon: 'person-outline',        label: 'Modifier mon profil',     color: colors.bright, route: 'EditProfile' },
   { icon: 'lock-closed-outline',   label: 'Changer mon PIN',          color: colors.bright, route: 'ChangePin' },
   { icon: 'card-outline',          label: 'Mes methodes de paiement', color: colors.bright, route: 'Info', params: { type: 'payment' } },
-  { icon: 'notifications-outline', label: 'Notifications',            color: colors.bright, route: 'Info', params: { type: 'notifications' } },
+  { icon: 'notifications-outline', label: 'Notifications',            color: colors.bright, route: 'Notifications' },
   { icon: 'help-circle-outline',   label: 'Aide & Support',           color: colors.bright, route: 'Info', params: { type: 'help' } },
   { icon: 'shield-checkmark-outline', label: 'Securite',              color: colors.success, route: 'Info', params: { type: 'security' } },
   { icon: 'document-text-outline', label: 'Conditions d utilisation', color: colors.muted,   route: 'Info', params: { type: 'terms' } },
@@ -18,13 +18,25 @@ const MENU_ITEMS = [
 
 export default function ProfileScreen({ navigation }) {
   const dispatch = useDispatch();
-  const { user } = useSelector(state => state.auth);
+  const { user, role } = useSelector(state => state.auth);
 
   const handleLogout = () => {
     Alert.alert('Deconnexion', 'Es-tu sur de vouloir te deconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Deconnexion', style: 'destructive', onPress: () => dispatch(logout()) },
     ]);
+  };
+
+  const handleMenuPress = (item) => {
+    // Le marchand a deja son propre ecran de notifications dans
+    // l onglet Dashboard (MerchantNotificationsScreen) ; pour lui,
+    // ce raccourci y redirige directement au lieu d en dupliquer un ici.
+    if (item.route === 'Notifications' && role === 'MERCHANT') {
+      const parent = navigation.getParent();
+      if (parent) parent.navigate('Dashboard', { screen: 'Notifications' });
+      return;
+    }
+    navigation.navigate(item.route, item.params);
   };
 
   return (
@@ -46,11 +58,7 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.menuItem}
-              onPress={() => navigation.navigate(item.route, item.params)}
-            >
+            <TouchableOpacity key={i} style={styles.menuItem} onPress={() => handleMenuPress(item)}>
               <View style={[styles.menuIcon, { backgroundColor: item.color + '18' }]}>
                 <Ionicons name={item.icon} size={20} color={item.color} />
               </View>

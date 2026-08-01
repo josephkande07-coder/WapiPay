@@ -55,12 +55,7 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response.data,
-  async (error) => {
-    // On ne supprime plus le token automatiquement sur un 401 :
-    // une requete peut echouer avant que le token soit charge,
-    // ce n est pas forcement un vrai token invalide.
-    return Promise.reject(error.response?.data || error);
-  }
+  async (error) => Promise.reject(error.response?.data || error)
 );
 
 export const authAPI = {
@@ -95,13 +90,14 @@ export const productsAPI = {
 };
 
 export const ordersAPI = {
-  create:        (data)       => api.post('/orders', data),
-  getMyOrders:   ()           => api.get('/orders/mine'),
-  getShopOrders: ()           => api.get('/orders/shop'),
-  getShopStats:  (period)     => api.get('/orders/shop/stats', { params: { period } }),
-  getById:       (id)         => api.get('/orders/' + id),
-  updateStatus:  (id, status) => api.put('/orders/' + id + '/status', { status }),
-  addReview:     (id, data)   => api.post('/orders/' + id + '/review', data),
+  create:              (data)       => api.post('/orders', data),
+  getMyOrders:         ()           => api.get('/orders/mine'),
+  getShopOrders:       ()           => api.get('/orders/shop'),
+  getShopStats:        (period)     => api.get('/orders/shop/stats', { params: { period } }),
+  getShopNotifications: ()          => api.get('/orders/shop/notifications'),
+  getById:             (id)         => api.get('/orders/' + id),
+  updateStatus:        (id, status) => api.put('/orders/' + id + '/status', { status }),
+  addReview:           (id, data)   => api.post('/orders/' + id + '/review', data),
 };
 
 export const paymentsAPI = {

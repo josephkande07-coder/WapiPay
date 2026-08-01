@@ -6,11 +6,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
+import PaymentMethodIcon from '../../components/PaymentMethodIcon';
 
 const METHODS = [
-  { id: 'mpesa',  name: 'M-Pesa (Vodacom)', emoji: '💚' },
-  { id: 'airtel', name: 'Airtel Money',      emoji: '🔴' },
-  { id: 'orange', name: 'Orange Money',      emoji: '🟠' },
+  { id: 'mpesa',  name: 'M-Pesa (Vodacom)' },
+  { id: 'airtel_money', name: 'Airtel Money' },
+  { id: 'orange_money', name: 'Orange Money' },
 ];
 
 export default function WithdrawScreen({ navigation }) {
@@ -90,7 +91,7 @@ export default function WithdrawScreen({ navigation }) {
               style={[styles.methodItem, method === m.id && styles.methodActive]}
               onPress={() => setMethod(m.id)}
             >
-              <Text style={{ fontSize: 22 }}>{m.emoji}</Text>
+              <PaymentMethodIcon method={m.id} size={40} />
               <Text style={styles.methodName}>{m.name}</Text>
               <View style={[styles.radio, method === m.id && styles.radioActive]}>
                 {method === m.id && <View style={styles.radioDot} />}

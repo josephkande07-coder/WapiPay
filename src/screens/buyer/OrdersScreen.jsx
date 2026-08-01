@@ -1,64 +1,103 @@
-// src/screens/buyer/OrdersScreen.jsx
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing } from '../../theme';
-
-const DEMO_ORDERS = [
-  { id: '#4821', shop: 'Mode Kin', product: 'Robe Ankara x2', total: 17000, status: 'delivery', date: 'Aujourd\'hui 14:32', emoji: '👗' },
-  { id: '#4819', shop: 'TechHub KIN', product: 'Samsung A14 x1', total: 95000, status: 'done', date: 'Hier 10:15', emoji: '📱' },
-  { id: '#4810', shop: 'Marché Bio', product: 'Légumes x3', total: 3600, status: 'done', date: 'Lun 08:45', emoji: '🥦' },
-];
+import { ordersAPI } from '../../services/api';
 
 const STATUS = {
-  pending:  { label: 'En attente',    color: colors.muted,   bg: colors.card },
-  delivery: { label: 'En livraison',  color: colors.gold,    bg: 'rgba(255,184,48,0.12)' },
-  done:     { label: 'Livré ✓',      color: colors.success, bg: 'rgba(0,229,160,0.1)' },
-  cancelled:{ label: 'Annulé',        color: colors.danger,  bg: 'rgba(255,77,109,0.1)' },
+  PENDING:     { label: 'En attente',   color: colors.muted,   bg: colors.card },
+  CONFIRMED:   { label: 'Confirmee',    color: colors.bright,  bg: 'rgba(77,110,255,0.2)' },
+  PICKUP:      { label: 'Recuperation', color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  IN_DELIVERY: { label: 'En livraison', color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  DELIVERED:   { label: 'Livre',        color: colors.success, bg: 'rgba(0,229,160,0.1)' },
+  CANCELLED:   { label: 'Annule',       color: colors.danger,  bg: 'rgba(255,77,109,0.1)' },
 };
 
-export default function OrdersScreen() {
+export default function OrdersScreen({ navigation }) {
+  const [orders,     setOrders]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadOrders();
+    const unsubscribe = navigation.addListener('focus', loadOrders);
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const res = await ordersAPI.getMyOrders();
+      setOrders(res.orders || []);
+    } catch (e) {
+      console.log('Erreur commandes:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  }, []);
+
+  const getProductLabel = (order) => {
+    if (!order.items || order.items.length === 0) return 'Commande';
+    const first = order.items[0];
+    const extra = order.items.length > 1 ? ' +' + (order.items.length - 1) : '';
+    return (first.product?.name || 'Produit') + ' x' + first.quantity + extra;
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={[colors.deep, colors.navy]} style={styles.header}>
         <Text style={styles.headerTitle}>Mes commandes</Text>
       </LinearGradient>
-      <FlatList
-        data={DEMO_ORDERS}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const s = STATUS[item.status];
-          return (
-            <TouchableOpacity style={styles.orderCard}>
-              <View style={styles.orderTop}>
-                <View style={styles.orderEmoji}><Text style={{ fontSize: 28 }}>{item.emoji}</Text></View>
-                <View style={styles.orderInfo}>
-                  <Text style={styles.orderId}>{item.id}</Text>
-                  <Text style={styles.orderShop}>{item.shop}</Text>
-                  <Text style={styles.orderProduct} numberOfLines={1}>{item.product}</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.accent]} tintColor={colors.accent} />}
+          renderItem={({ item }) => {
+            const s = STATUS[item.status] || STATUS.PENDING;
+            return (
+              <TouchableOpacity
+                style={styles.orderCard}
+                onPress={() => navigation.navigate('OrderTracking', { orderId: item.id })}
+              >
+                <View style={styles.orderTop}>
+                  <View style={styles.orderEmoji}><Text style={{ fontSize: 24 }}>📦</Text></View>
+                  <View style={styles.orderInfo}>
+                    <Text style={styles.orderId}>#{item.id.slice(-6).toUpperCase()}</Text>
+                    <Text style={styles.orderShop}>{item.shop?.name}</Text>
+                    <Text style={styles.orderProduct} numberOfLines={1}>{getProductLabel(item)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.orderTotal}>{item.totalAmount?.toLocaleString()}</Text>
+                    <Text style={styles.orderCurrency}>CDF</Text>
+                  </View>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.orderTotal}>{item.total.toLocaleString()}</Text>
-                  <Text style={styles.orderCurrency}>CDF</Text>
+                <View style={styles.orderBottom}>
+                  <Text style={styles.orderDate}>{new Date(item.createdAt).toLocaleDateString('fr-FR')}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+                    <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.orderBottom}>
-                <Text style={styles.orderDate}>{item.date}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
-                  <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>📦</Text>
-            <Text style={styles.emptyText}>Aucune commande pour l'instant</Text>
-          </View>
-        }
-      />
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>📦</Text>
+              <Text style={styles.emptyText}>Aucune commande pour l instant</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }

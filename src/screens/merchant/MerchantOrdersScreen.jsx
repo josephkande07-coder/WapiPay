@@ -9,26 +9,29 @@ import { colors, radius, spacing } from '../../theme';
 import { ordersAPI } from '../../services/api';
 
 const STATUS = {
-  PENDING:     { label: 'En attente',    color: colors.muted,   bg: colors.card },
-  CONFIRMED:   { label: 'Confirme',      color: colors.bright,  bg: 'rgba(77,110,255,0.2)' },
-  PICKUP:      { label: 'Recuperation',  color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
-  IN_DELIVERY: { label: 'En livraison',  color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
-  DELIVERED:   { label: 'Livre',         color: colors.success, bg: 'rgba(0,229,160,0.12)' },
-  CANCELLED:   { label: 'Annule',        color: colors.danger,  bg: 'rgba(255,77,109,0.1)' },
+  PENDING:     { label: 'Nouveau',      color: colors.bright,  bg: 'rgba(77,110,255,0.2)' },
+  CONFIRMED:   { label: 'Confirme',     color: colors.bright,  bg: 'rgba(77,110,255,0.2)' },
+  PICKUP:      { label: 'Recuperation', color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  IN_DELIVERY: { label: 'En livraison', color: colors.gold,    bg: 'rgba(255,184,48,0.15)' },
+  DELIVERED:   { label: 'Livre',        color: colors.success, bg: 'rgba(0,229,160,0.12)' },
+  CANCELLED:   { label: 'Annule',       color: colors.danger,  bg: 'rgba(255,77,109,0.1)' },
 };
 
 const TABS = ['Tous', 'En attente', 'En livraison', 'Livres'];
 
-export default function MerchantOrdersScreen() {
+export default function MerchantOrdersScreen({ navigation }) {
   const [orders,      setOrders]      = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [activeTab,   setActiveTab]   = useState('Tous');
   const [updatingId,  setUpdatingId]  = useState(null);
 
+  // ═══ CORRECTION ═══ recharge a chaque fois que l onglet reprend le focus
   useEffect(() => {
     loadOrders();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', loadOrders);
+    return unsubscribe;
+  }, [navigation]);
 
   const loadOrders = async () => {
     try {
@@ -52,9 +55,7 @@ export default function MerchantOrdersScreen() {
     setUpdatingId(orderId);
     try {
       await ordersAPI.updateStatus(orderId, newStatus);
-      setOrders(prev => prev.map(o =>
-        o.id === orderId ? { ...o, status: newStatus } : o
-      ));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     } catch (e) {
       Alert.alert('Erreur', 'Impossible de mettre a jour le statut.');
     } finally {
@@ -102,7 +103,6 @@ export default function MerchantOrdersScreen() {
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Tabs */}
       <View style={styles.tabsRow}>
         {TABS.map(tab => (
           <TouchableOpacity
@@ -110,9 +110,7 @@ export default function MerchantOrdersScreen() {
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab}
-            </Text>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -124,14 +122,7 @@ export default function MerchantOrdersScreen() {
           data={filtered}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.accent]}
-              tintColor={colors.accent}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.accent]} tintColor={colors.accent} />}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <Text style={styles.emptyEmoji}>📦</Text>
@@ -152,19 +143,14 @@ export default function MerchantOrdersScreen() {
                     <Text style={styles.orderAddress}>{item.deliveryAddress}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                    <Text style={styles.orderAmount}>
-                      {item.totalAmount?.toLocaleString()} CDF
-                    </Text>
+                    <Text style={styles.orderAmount}>{item.totalAmount?.toLocaleString()} CDF</Text>
                     <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
                       <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
                     </View>
-                    <Text style={styles.orderDate}>
-                      {new Date(item.createdAt).toLocaleDateString('fr-FR')}
-                    </Text>
+                    <Text style={styles.orderDate}>{new Date(item.createdAt).toLocaleDateString('fr-FR')}</Text>
                   </View>
                 </View>
 
-                {/* Actions selon statut */}
                 {item.status === 'PENDING' && (
                   <TouchableOpacity
                     style={styles.confirmBtn}
@@ -180,12 +166,36 @@ export default function MerchantOrdersScreen() {
                 {item.status === 'CONFIRMED' && (
                   <TouchableOpacity
                     style={[styles.confirmBtn, { borderColor: 'rgba(255,184,48,0.3)', backgroundColor: 'rgba(255,184,48,0.08)' }]}
+                    onPress={() => handleUpdateStatus(item.id, 'PICKUP')}
+                    disabled={updatingId === item.id}
+                  >
+                    {updatingId === item.id
+                      ? <ActivityIndicator color={colors.gold} size="small" />
+                      : <Text style={[styles.confirmBtnText, { color: colors.gold }]}>Marquer en recuperation</Text>
+                    }
+                  </TouchableOpacity>
+                )}
+                {item.status === 'PICKUP' && (
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, { borderColor: 'rgba(255,184,48,0.3)', backgroundColor: 'rgba(255,184,48,0.08)' }]}
                     onPress={() => handleUpdateStatus(item.id, 'IN_DELIVERY')}
                     disabled={updatingId === item.id}
                   >
                     {updatingId === item.id
                       ? <ActivityIndicator color={colors.gold} size="small" />
                       : <Text style={[styles.confirmBtnText, { color: colors.gold }]}>Marquer en livraison</Text>
+                    }
+                  </TouchableOpacity>
+                )}
+                {item.status === 'IN_DELIVERY' && (
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, { borderColor: 'rgba(0,229,160,0.3)' }]}
+                    onPress={() => handleUpdateStatus(item.id, 'DELIVERED')}
+                    disabled={updatingId === item.id}
+                  >
+                    {updatingId === item.id
+                      ? <ActivityIndicator color={colors.success} size="small" />
+                      : <Text style={styles.confirmBtnText}>Marquer comme livre</Text>
                     }
                   </TouchableOpacity>
                 )}

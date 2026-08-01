@@ -9,11 +9,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { clearCart }       from '../../store/slices/cartSlice';
 import { colors, radius, spacing } from '../../theme';
 import { paymentsAPI } from '../../services/api';
+import PaymentMethodIcon from '../../components/PaymentMethodIcon';
 
 const PAYMENT_METHODS = [
-  { id: 'mpesa',        name: 'M-Pesa',       emoji: '💚', color: '#00A550', desc: 'Vodacom M-Pesa' },
-  { id: 'airtel_money', name: 'Airtel Money',  emoji: '🔴', color: '#E40000', desc: 'Airtel DRC' },
-  { id: 'orange_money', name: 'Orange Money',  emoji: '🟠', color: '#FF6600', desc: 'Orange RDC' },
+  { id: 'mpesa',        name: 'M-Pesa',       desc: 'Vodacom M-Pesa' },
+  { id: 'airtel_money', name: 'Airtel Money', desc: 'Airtel DRC' },
+  { id: 'orange_money', name: 'Orange Money', desc: 'Orange RDC' },
 ];
 
 const PIN_LENGTH = 6;
@@ -71,27 +72,16 @@ export default function PaymentScreen({ navigation, route }) {
     }
   };
 
-  // ═══ Navigation correcte vers les onglets parents ═══
-  // PaymentScreen est imbrique dans l onglet "Panier" (CartStack).
-  // Pour aller vers un autre ONGLET (Accueil, Commandes), il faut
-  // remonter au navigateur parent (le Tab.Navigator), pas juste
-  // essayer de naviguer localement dans ce stack.
   const goToHome = () => {
     const parent = navigation.getParent();
-    if (parent) {
-      parent.navigate('Accueil', { screen: 'HomeMain' });
-    } else {
-      navigation.navigate('HomeMain');
-    }
+    if (parent) parent.navigate('Accueil', { screen: 'HomeMain' });
+    else navigation.navigate('HomeMain');
   };
 
   const goToOrders = () => {
     const parent = navigation.getParent();
-    if (parent) {
-      parent.navigate('Commandes', { screen: 'OrdersMain' });
-    } else {
-      navigation.navigate('OrdersMain');
-    }
+    if (parent) parent.navigate('Commandes', { screen: 'OrdersMain' });
+    else navigation.navigate('OrdersMain');
   };
 
   if (step === 'success') {
@@ -178,9 +168,7 @@ export default function PaymentScreen({ navigation, route }) {
                 style={[styles.methodItem, selectedMethod === m.id && styles.methodActive]}
                 onPress={() => setSelectedMethod(m.id)}
               >
-                <View style={[styles.methodLogo, { backgroundColor: m.color + '22' }]}>
-                  <Text style={{ fontSize: 22 }}>{m.emoji}</Text>
-                </View>
+                <PaymentMethodIcon method={m.id} size={44} />
                 <View style={styles.methodInfo}>
                   <Text style={styles.methodName}>{m.name}</Text>
                   <Text style={styles.methodDesc}>{m.desc}</Text>
@@ -260,7 +248,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 14 },
   methodItem: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.lg, marginBottom: 10 },
   methodActive: { borderColor: colors.accent, backgroundColor: 'rgba(26,58,255,0.10)' },
-  methodLogo: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   methodInfo: { flex: 1 },
   methodName: { fontSize: 14, fontWeight: '700', color: colors.text },
   methodDesc: { fontSize: 11, color: colors.muted, marginTop: 2 },

@@ -6,20 +6,21 @@ import { useSelector }              from 'react-redux';
 import { colors }                   from '../theme';
 import { selectCartCount }          from '../store/slices/cartSlice';
 
-import HomeScreen          from '../screens/buyer/HomeScreen';
-import SearchScreen        from '../screens/buyer/SearchScreen';
-import ShopScreen          from '../screens/buyer/ShopScreen';
-import ProductScreen       from '../screens/buyer/ProductScreen';
-import CartScreen          from '../screens/buyer/CartScreen';
-import CheckoutScreen      from '../screens/buyer/CheckoutScreen';
-import PaymentScreen       from '../screens/buyer/PaymentScreen';
-import OrdersScreen        from '../screens/buyer/OrdersScreen';
-import OrderTrackingScreen from '../screens/buyer/OrderTrackingScreen';
-import ReviewScreen        from '../screens/buyer/ReviewScreen';
-import ProfileScreen       from '../screens/shared/ProfileScreen';
-import EditProfileScreen   from '../screens/shared/EditProfileScreen';
-import ChangePinScreen     from '../screens/shared/ChangePinScreen';
-import InfoScreen          from '../screens/shared/InfoScreen';
+import HomeScreen               from '../screens/buyer/HomeScreen';
+import SearchScreen             from '../screens/buyer/SearchScreen';
+import ShopScreen               from '../screens/buyer/ShopScreen';
+import ProductScreen            from '../screens/buyer/ProductScreen';
+import CartScreen               from '../screens/buyer/CartScreen';
+import CheckoutScreen           from '../screens/buyer/CheckoutScreen';
+import PaymentScreen            from '../screens/buyer/PaymentScreen';
+import OrdersScreen             from '../screens/buyer/OrdersScreen';
+import OrderTrackingScreen      from '../screens/buyer/OrderTrackingScreen';
+import ReviewScreen             from '../screens/buyer/ReviewScreen';
+import ProfileScreen            from '../screens/shared/ProfileScreen';
+import EditProfileScreen        from '../screens/shared/EditProfileScreen';
+import ChangePinScreen          from '../screens/shared/ChangePinScreen';
+import InfoScreen               from '../screens/shared/InfoScreen';
+import BuyerNotificationsScreen from '../screens/buyer/BuyerNotificationsScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -54,8 +55,8 @@ function OrdersStack() {
   );
 }
 
-// Le profil a maintenant son propre stack pour que
-// "Modifier mon profil", "Changer mon PIN" etc. menent vraiment quelque part
+// Le profil a son propre stack : Modifier profil, Changer PIN, Notifications
+// et les pages d info menent maintenant vraiment quelque part.
 function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -63,6 +64,14 @@ function ProfileStack() {
       <Stack.Screen name="EditProfile"  component={EditProfileScreen} />
       <Stack.Screen name="ChangePin"    component={ChangePinScreen} />
       <Stack.Screen name="Info"         component={InfoScreen} />
+      <Stack.Screen name="Notifications" component={BuyerNotificationsScreen} />
+      {/* On reutilise les ecrans deja presents dans OrdersStack :
+          en tapant une notification, on veut ouvrir CET ecran meme si
+          on est parti du Profil et non de l onglet Commandes.
+          Review est aussi enregistre ici car OrderTracking peut y mener
+          (bouton "Laisser un avis" pour une commande livree). */}
+      <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+      <Stack.Screen name="Review"        component={ReviewScreen} />
     </Stack.Navigator>
   );
 }

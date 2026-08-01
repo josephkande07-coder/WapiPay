@@ -1,36 +1,83 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
+import { ordersAPI } from '../../services/api';
 
-const NOTIFS = [
-  { id: '1', type: 'order',   title: 'Nouvelle commande !',      desc: 'Mireille K. a commande Robe Ankara x2',    time: 'Il y a 5 min',  read: false },
-  { id: '2', type: 'payment', title: 'Paiement recu',            desc: '17 000 CDF credites sur ton compte',        time: 'Il y a 12 min', read: false },
-  { id: '3', type: 'review',  title: 'Nouvel avis 5 etoiles',    desc: 'Jean-Paul a laisse un tres bon avis',       time: 'Il y a 1h',     read: true  },
-  { id: '4', type: 'sub',     title: 'Abonnement renouvele',     desc: 'Ton plan Pro a ete renouvele avec succes',  time: 'Il y a 2h',     read: true  },
-  { id: '5', type: 'order',   title: 'Commande livree',          desc: 'La commande #4819 a ete livree',            time: 'Hier',          read: true  },
-  { id: '6', type: 'alert',   title: 'Stock faible',             desc: 'Boubou Femme : plus que 2 en stock',        time: 'Hier',          read: true  },
-];
-
-const TYPE_CONFIG = {
-  order:   { icon: 'cube',           color: colors.accent  },
-  payment: { icon: 'cash',           color: colors.success },
-  review:  { icon: 'star',           color: colors.gold    },
-  sub:     { icon: 'refresh-circle', color: colors.bright  },
-  alert:   { icon: 'warning',        color: colors.danger  },
+const EVENT_CONFIG = {
+  PENDING:     { icon: 'cube',             color: colors.bright,  title: 'Nouvelle commande' },
+  CONFIRMED:   { icon: 'checkmark-circle', color: colors.bright,  title: 'Commande confirmee' },
+  PICKUP:      { icon: 'bag-check',        color: colors.gold,    title: 'Colis en recuperation' },
+  IN_DELIVERY: { icon: 'bicycle',          color: colors.gold,    title: 'Commande en livraison' },
+  DELIVERED:   { icon: 'checkmark-done',   color: colors.success, title: 'Commande livree' },
+  CANCELLED:   { icon: 'close-circle',     color: colors.danger,  title: 'Commande annulee' },
 };
 
-export default function MerchantNotificationsScreen({ navigation }) {
-  const [notifs, setNotifs] = useState(NOTIFS);
-  const unreadCount = notifs.filter(n => !n.read).length;
+function timeAgo(dateStr) {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1)   return 'A l instant';
+  if (mins < 60)  return 'Il y a ' + mins + ' min';
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return 'Il y a ' + hours + 'h';
+  const days = Math.floor(hours / 24);
+  return 'Il y a ' + days + 'j';
+}
 
-  const markAllRead = () => {
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+export default function MerchantNotificationsScreen({ navigation }) {
+  const [orders,     setOrders]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [readIds,    setReadIds]    = useState([]);
+
+  useEffect(() => {
+    loadOrders();
+    const unsubscribe = navigation.addListener('focus', loadOrders);
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const res = await ordersAPI.getShopOrders();
+      const sorted = (res.orders || []).slice().sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      setOrders(sorted);
+    } catch (e) {
+      console.log('Erreur notifications:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const markOneRead = (id) => {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  }, []);
+
+  const markAllRead = () => setReadIds(orders.map(o => o.id));
+  const unreadCount = orders.filter(o => !readIds.includes(o.id)).length;
+
+  const getProductLabel = (order) => {
+    if (!order.items || order.items.length === 0) return 'Commande';
+    const first = order.items[0];
+    return (first.product?.name || 'Produit') + ' x' + first.quantity;
+  };
+
+  // ═══ REDIRECTION ═══
+  // Il n existe pas encore d ecran de detail de commande cote marchand,
+  // donc on ouvre l onglet "Commandes" (liste complete filtrable) en
+  // remontant au navigateur parent - c est l ecran le plus pertinent
+  // disponible aujourd hui pour retrouver cette commande precise.
+  const handlePress = (order) => {
+    setReadIds(prev => [...prev, order.id]);
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('Commandes');
+    }
   };
 
   return (
@@ -47,30 +94,46 @@ export default function MerchantNotificationsScreen({ navigation }) {
         )}
       </LinearGradient>
 
-      <FlatList
-        data={notifs}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const config = TYPE_CONFIG[item.type];
-          return (
-            <TouchableOpacity
-              style={[styles.notifItem, !item.read && styles.notifUnread]}
-              onPress={() => markOneRead(item.id)}
-            >
-              <View style={[styles.notifIcon, { backgroundColor: config.color + '20' }]}>
-                <Ionicons name={config.icon} size={22} color={config.color} />
-              </View>
-              <View style={styles.notifContent}>
-                <Text style={styles.notifTitle}>{item.title}</Text>
-                <Text style={styles.notifDesc} numberOfLines={2}>{item.desc}</Text>
-                <Text style={styles.notifTime}>{item.time}</Text>
-              </View>
-              {!item.read && <View style={styles.unreadDot} />}
-            </TouchableOpacity>
-          );
-        }}
-      />
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.accent]} tintColor={colors.accent} />}
+          renderItem={({ item }) => {
+            const config = EVENT_CONFIG[item.status] || EVENT_CONFIG.PENDING;
+            const isRead = readIds.includes(item.id);
+            return (
+              <TouchableOpacity
+                style={[styles.notifItem, !isRead && styles.notifUnread]}
+                onPress={() => handlePress(item)}
+              >
+                <View style={[styles.notifIcon, { backgroundColor: config.color + '20' }]}>
+                  <Ionicons name={config.icon} size={22} color={config.color} />
+                </View>
+                <View style={styles.notifContent}>
+                  <Text style={styles.notifTitle}>{config.title}</Text>
+                  <Text style={styles.notifDesc} numberOfLines={2}>
+                    {getProductLabel(item)} - {item.buyer?.fullName} - {item.totalAmount?.toLocaleString()} CDF
+                  </Text>
+                  <Text style={styles.notifTime}>{timeAgo(item.createdAt)}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                {!isRead && <View style={styles.unreadDot} />}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyEmoji}>🔔</Text>
+              <Text style={styles.emptyText}>Aucune notification pour l instant</Text>
+              <Text style={styles.emptyHint}>Les notifications apparaitront a chaque nouvelle commande</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -83,12 +146,16 @@ const styles = StyleSheet.create({
   markBtn: { backgroundColor: 'rgba(26,58,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   markBtnText: { fontSize: 11, color: colors.accent, fontWeight: '700' },
   list: { padding: spacing.lg, gap: 10 },
-  notifItem: { flexDirection: 'row', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 14 },
+  notifItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 14 },
   notifUnread: { borderColor: 'rgba(26,58,255,0.3)', backgroundColor: 'rgba(17,32,102,0.8)' },
   notifIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   notifContent: { flex: 1 },
   notifTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 3 },
   notifDesc: { fontSize: 12, color: colors.muted, lineHeight: 17 },
   notifTime: { fontSize: 10, color: colors.muted, marginTop: 5 },
-  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent, alignSelf: 'flex-start', marginTop: 4 },
+  unreadDot: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
+  emptyBox: { alignItems: 'center', paddingTop: 80 },
+  emptyEmoji: { fontSize: 50, marginBottom: spacing.md },
+  emptyText: { fontSize: 15, color: colors.muted },
+  emptyHint: { fontSize: 12, color: colors.muted, marginTop: 6, textAlign: 'center', paddingHorizontal: spacing.xl },
 });
