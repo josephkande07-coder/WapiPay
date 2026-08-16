@@ -24,7 +24,6 @@ export default function HomeScreen({ navigation }) {
   const [shops,    setShops]    = useState([]);
   const [products, setProducts] = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [activeCategory, setActiveCategory] = useState(null);
 
   const firstName = user?.fullName?.split(' ')[0] || 'toi';
 
@@ -48,13 +47,27 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const handleSearch = async () => {
-    if (!search) return loadData();
-    try {
-      const res = await productsAPI.search({ q: search });
-      setProducts(res.products || []);
-    } catch (e) {
-      console.log('Erreur recherche:', e);
+  // ═══ CORRECTION ═══
+  // Plutot que de dupliquer la logique de recherche ici, on renvoie
+  // vers l onglet Explorer (SearchScreen) qui fait la vraie recherche
+  // complete (produits + boutiques). Evite d avoir deux moteurs de
+  // recherche differents qui peuvent se desynchroniser.
+  const goToSearch = () => {
+    if (!search) return;
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('Explorer', { initialQuery: search });
+    }
+  };
+
+  // ═══ CORRECTION ═══
+  // Avant, taper sur une categorie changeait juste sa couleur sans
+  // rien filtrer. Maintenant ca ouvre l onglet Explorer avec cette
+  // categorie deja selectionnee, qui lui interroge vraiment le backend.
+  const goToCategory = (catName) => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('Explorer', { initialCategory: catName });
     }
   };
 
@@ -72,11 +85,21 @@ export default function HomeScreen({ navigation }) {
                 <Ionicons name="notifications-outline" size={22} color={colors.text} />
                 <View style={styles.notifDot} />
               </TouchableOpacity>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{firstName[0]?.toUpperCase()}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.avatarBtn}
+                onPress={() => navigation.getParent()?.navigate('Profil')}
+              >
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{firstName[0]?.toUpperCase()}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
+
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={colors.muted} />
             <TextInput
@@ -85,10 +108,11 @@ export default function HomeScreen({ navigation }) {
               placeholderTextColor={colors.muted}
               value={search}
               onChangeText={setSearch}
-              onSubmitEditing={handleSearch}
+              onSubmitEditing={goToSearch}
+              returnKeyType="search"
             />
             {search.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearch(''); loadData(); }}>
+              <TouchableOpacity onPress={() => setSearch('')}>
                 <Ionicons name="close-circle" size={18} color={colors.muted} />
               </TouchableOpacity>
             )}
@@ -110,18 +134,20 @@ export default function HomeScreen({ navigation }) {
           {CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.id}
-              style={[styles.catItem, activeCategory === cat.id && styles.catItemActive]}
-              onPress={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
+              style={styles.catItem}
+              onPress={() => goToCategory(cat.name)}
             >
               <Text style={styles.catEmoji}>{cat.emoji}</Text>
-              <Text style={[styles.catName, activeCategory === cat.id && { color: '#fff' }]}>{cat.name}</Text>
+              <Text style={styles.catName}>{cat.name}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Boutiques en vedette</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Voir tout</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.getParent()?.navigate('Explorer')}>
+            <Text style={styles.seeAll}>Voir tout</Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -134,9 +160,15 @@ export default function HomeScreen({ navigation }) {
                 style={styles.shopCard}
                 onPress={() => navigation.navigate('Shop', { shop })}
               >
-                <LinearGradient colors={[colors.mid, colors.deep]} style={styles.shopImgBg}>
-                  <Text style={styles.shopEmoji}>🏪</Text>
-                </LinearGradient>
+                <View style={styles.shopImgBg}>
+                  {shop.logoUrl ? (
+                    <Image source={{ uri: shop.logoUrl }} style={styles.shopRealImg} />
+                  ) : (
+                    <LinearGradient colors={[colors.mid, colors.deep]} style={styles.shopImgFallback}>
+                      <Text style={styles.shopEmoji}>🏪</Text>
+                    </LinearGradient>
+                  )}
+                </View>
                 <View style={styles.shopCardInfo}>
                   <Text style={styles.shopCardName}>{shop.name}</Text>
                   <Text style={styles.shopCardMeta}>{shop.rating} etoiles</Text>
@@ -156,7 +188,9 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Produits populaires</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Voir tout</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.getParent()?.navigate('Explorer')}>
+            <Text style={styles.seeAll}>Voir tout</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.productsGrid}>
@@ -201,6 +235,8 @@ const styles = StyleSheet.create({
   headerRight:{ flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBtn:   { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.card, borderWidth:1, borderColor:colors.border, alignItems:'center', justifyContent:'center' },
   notifDot:  { position:'absolute', top:8, right:8, width:8, height:8, borderRadius:4, backgroundColor:colors.danger, borderWidth:1, borderColor:colors.navy },
+  avatarBtn: { width: 40, height: 40 },
+  avatarImg: { width: 40, height: 40, borderRadius: 13 },
   avatar:    { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.accent, alignItems:'center', justifyContent:'center' },
   avatarText:{ color:'#fff', fontWeight:'800', fontSize:16 },
   searchBar: { flexDirection:'row', alignItems:'center', backgroundColor:colors.card, borderWidth:1, borderColor:colors.border, borderRadius:radius.lg, paddingHorizontal:14, height:48, gap:10 },
@@ -214,12 +250,13 @@ const styles = StyleSheet.create({
   seeAll:       { fontSize:12, color:colors.accent, fontWeight:'600' },
   catScroll:  { paddingHorizontal:spacing.lg, gap:10, paddingBottom:4 },
   catItem:    { alignItems:'center', paddingVertical:10, paddingHorizontal:14, backgroundColor:colors.card, borderWidth:1, borderColor:colors.border, borderRadius:radius.lg, minWidth:70 },
-  catItemActive:{ backgroundColor:colors.accent, borderColor:colors.accent },
   catEmoji:   { fontSize:22, marginBottom:4 },
   catName:    { fontSize:11, color:colors.muted, fontWeight:'600' },
   shopScroll: { paddingHorizontal:spacing.lg, gap:12, paddingBottom:4 },
   shopCard:   { width:160, backgroundColor:colors.card, borderWidth:1, borderColor:colors.border, borderRadius:radius.xl, overflow:'hidden' },
-  shopImgBg:  { height:90, alignItems:'center', justifyContent:'center' },
+  shopImgBg:  { height:90 },
+  shopRealImg:{ width:'100%', height:'100%' },
+  shopImgFallback: { width:'100%', height:'100%', alignItems:'center', justifyContent:'center' },
   shopEmoji:  { fontSize:40 },
   shopCardInfo:{ padding:10 },
   shopCardName:{ fontSize:13, fontWeight:'700', color:colors.text, marginBottom:3 },

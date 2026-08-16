@@ -6,10 +6,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
 import { useDispatch }     from 'react-redux';
-import { saveToken } from '../../services/api';
 import { loginSuccess }    from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
-import api from '../../services/api';
+import api, { saveToken } from '../../services/api';
 
 const PIN_LENGTH = 6;
 
@@ -52,6 +51,7 @@ export default function SetPinScreen({ navigation, route }) {
               fullName,
               pin: newConfirm,
             });
+            // ═══ CORRECTION : saveToken() au lieu de SecureStore direct ═══
             await saveToken(response.token);
             dispatch(loginSuccess({
               token: response.token,

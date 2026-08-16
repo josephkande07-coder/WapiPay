@@ -6,10 +6,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
 import { useDispatch }     from 'react-redux';
-import { saveToken } from '../../services/api';
 import { loginSuccess }    from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
-import api from '../../services/api';
+import api, { saveToken } from '../../services/api';
 
 export default function LoginScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -29,6 +28,14 @@ export default function LoginScreen({ navigation }) {
         phone: '+243' + phone,
         pin,
       });
+      // ═══ CORRECTION ═══
+      // saveToken() (au lieu d ecrire directement dans SecureStore)
+      // met a jour EN MEME TEMPS le token garde en memoire dans
+      // services/api.js ET le stockage securise. Ecrire seulement
+      // dans SecureStore laissait l ancien token actif en memoire
+      // jusqu au prochain redemarrage complet de l app, ce qui
+      // provoquait des requetes authentifiees avec le mauvais compte
+      // apres un changement de compte dans la meme session.
       await saveToken(response.token);
       dispatch(loginSuccess({
         token: response.token,

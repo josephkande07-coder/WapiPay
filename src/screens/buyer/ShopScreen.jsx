@@ -44,7 +44,13 @@ export default function ShopScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={[colors.mid, colors.deep]} style={styles.hero}>
+        <View style={styles.hero}>
+          {shop?.logoUrl ? (
+            <Image source={{ uri: shop.logoUrl }} style={styles.heroImg} />
+          ) : (
+            <LinearGradient colors={[colors.mid, colors.deep]} style={styles.heroImg} />
+          )}
+          <View style={styles.heroOverlay} />
           <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
@@ -57,7 +63,7 @@ export default function ShopScreen({ navigation, route }) {
             <Text style={styles.shopName}>{shop?.name}</Text>
             <Text style={styles.shopLoc}>{shop?.address}, {shop?.commune}, Kinshasa</Text>
           </View>
-        </LinearGradient>
+        </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}><Text style={styles.statVal}>{shop?.rating || 0}</Text><Text style={styles.statLbl}>Note</Text></View>
@@ -88,10 +94,7 @@ export default function ShopScreen({ navigation, route }) {
               >
                 <View style={styles.productImgWrap}>
                   {product.images && product.images[0] ? (
-                    <Image
-                      source={{ uri: product.images[0] }}
-                      style={styles.productImg}
-                    />
+                    <Image source={{ uri: product.images[0] }} style={styles.productImg} />
                   ) : (
                     <LinearGradient colors={[colors.mid, colors.deep]} style={styles.productImgPlaceholder}>
                       <Text style={styles.productEmoji}>📦</Text>
@@ -106,15 +109,30 @@ export default function ShopScreen({ navigation, route }) {
                     style={[styles.addBtn, added[product.id] && styles.addBtnDone]}
                     onPress={() => handleAddToCart(product)}
                   >
-                    <Text style={styles.addBtnText}>
-                      {added[product.id] ? 'Ajoute !' : '+ Panier'}
-                    </Text>
+                    <Text style={styles.addBtnText}>{added[product.id] ? 'Ajoute !' : '+ Panier'}</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             ))}
           </View>
         )}
+
+        {/* Avis recents - montre a l acheteur que les boutiques sont vraiment notees */}
+        {shop?.reviews && shop.reviews.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Avis clients</Text>
+            {shop.reviews.slice(0, 5).map(review => (
+              <View key={review.id} style={styles.reviewCard}>
+                <View style={styles.reviewTop}>
+                  <Text style={styles.reviewAuthor}>{review.buyer?.fullName}</Text>
+                  <Text style={styles.reviewStars}>{'⭐'.repeat(review.rating)}</Text>
+                </View>
+                {review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : null}
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={{ height: 30 }} />
       </ScrollView>
     </View>
@@ -123,9 +141,11 @@ export default function ShopScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy },
-  hero: { height: 180, justifyContent: 'flex-end', padding: spacing.lg, position: 'relative' },
+  hero: { height: 180, justifyContent: 'flex-end', position: 'relative' },
+  heroImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
+  heroOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,15,44,0.55)' },
   back: { position: 'absolute', top: 52, left: spacing.lg, width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
-  heroInfo: {},
+  heroInfo: { padding: spacing.lg },
   verifiedBadge: { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: colors.success, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 6 },
   verifiedText: { fontSize: 10, fontWeight: '700', color: '#000' },
   shopName: { fontSize: 22, fontWeight: '800', color: '#fff' },
@@ -153,4 +173,10 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyEmoji: { fontSize: 50, marginBottom: spacing.md },
   emptyText: { color: colors.muted, fontSize: 13 },
+  section: { padding: spacing.lg },
+  reviewCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, marginBottom: 10 },
+  reviewTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  reviewAuthor: { fontSize: 13, fontWeight: '700', color: colors.text },
+  reviewStars: { fontSize: 11 },
+  reviewComment: { fontSize: 12, color: colors.muted, lineHeight: 18 },
 });

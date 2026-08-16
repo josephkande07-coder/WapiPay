@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../../theme';
-import { productsAPI } from '../../services/api';
+import { productsAPI, shopsAPI } from '../../services/api';
 
 const CATEGORIES = [
   { name: 'Mode',        emoji: '👗' },
@@ -17,43 +17,68 @@ const CATEGORIES = [
   { name: 'Sport',       emoji: '⚽' },
 ];
 
-export default function SearchScreen({ navigation }) {
-  const [search,         setSearch]         = useState('');
+export default function SearchScreen({ navigation, route }) {
+  const [search,         setSearch]         = useState(route.params?.initialQuery || '');
   const [products,       setProducts]       = useState([]);
+  const [shops,          setShops]          = useState([]);
   const [loading,        setLoading]        = useState(false);
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategory, setActiveCategory] = useState(route.params?.initialCategory || null);
 
+  // Reagit quand HomeScreen renvoie ici avec une nouvelle requete
+  // ou une nouvelle categorie (navigation.navigate('Explorer', {...}))
   useEffect(() => {
-    loadProducts();
-  }, []);
+    if (route.params?.initialQuery !== undefined) {
+      setSearch(route.params.initialQuery);
+    }
+    if (route.params?.initialCategory !== undefined) {
+      setActiveCategory(route.params.initialCategory);
+    }
+  }, [route.params]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadProducts(search, activeCategory);
-    }, 500);
+      runSearch(search, activeCategory);
+    }, 400);
     return () => clearTimeout(timer);
   }, [search, activeCategory]);
 
-  const loadProducts = async (q = '', category = null) => {
+  // ═══ CORRECTION ═══
+  // Avant, cet ecran ne cherchait que dans les produits (productsAPI.search)
+  // alors que le champ dit "produits, boutiques". Une recherche par NOM
+  // DE BOUTIQUE ne renvoyait donc jamais rien. On interroge maintenant
+  // les deux en parallele.
+  const runSearch = async (q, category) => {
     try {
       setLoading(true);
       const params = {};
-      if (q)        params.q        = q;
+      if (q) params.q = q;
       if (category) params.category = category;
-      const res = await productsAPI.search(params);
-      setProducts(res.products || []);
+
+      const shopParams = {};
+      if (q) shopParams.search = q;
+      if (category) shopParams.category = category;
+
+      const [productsRes, shopsRes] = await Promise.all([
+        productsAPI.search(params),
+        shopsAPI.getAll(shopParams),
+      ]);
+      setProducts(productsRes.products || []);
+      setShops(shopsRes.shops || []);
     } catch (e) {
       console.log('Erreur recherche:', e);
       setProducts([]);
+      setShops([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCategory = (catName) => {
-    const newCat = activeCategory === catName ? null : catName;
-    setActiveCategory(newCat);
+    setActiveCategory(prev => prev === catName ? null : catName);
   };
+
+  const hasQuery = !!search || !!activeCategory;
+  const noResults = hasQuery && products.length === 0 && shops.length === 0 && !loading;
 
   return (
     <View style={styles.container}>
@@ -101,47 +126,80 @@ export default function SearchScreen({ navigation }) {
         <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={products}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
+          data={[]}
           ListHeaderComponent={
-            <Text style={styles.resultsTitle}>
-              {search
-                ? products.length + ' resultat' + (products.length > 1 ? 's' : '') + ' pour "' + search + '"'
-                : 'Tous les produits'
-              }
-            </Text>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyEmoji}>🔍</Text>
-              <Text style={styles.emptyText}>
-                {search ? 'Aucun resultat pour "' + search + '"' : 'Aucun produit disponible'}
-              </Text>
+            <View>
+              {shops.length > 0 && (
+                <View style={{ marginBottom: spacing.md }}>
+                  <Text style={styles.sectionTitle}>Boutiques ({shops.length})</Text>
+                  {shops.map(shop => (
+                    <TouchableOpacity
+                      key={shop.id}
+                      style={styles.resultItem}
+                      onPress={() => navigation.navigate('HomeMain')}
+                    >
+                      <View style={styles.resultImg}>
+                        {shop.logoUrl ? (
+                          <Image source={{ uri: shop.logoUrl }} style={styles.resultRealImg} />
+                        ) : (
+                          <Text style={{ fontSize: 24 }}>🏪</Text>
+                        )}
+                      </View>
+                      <View style={styles.resultInfo}>
+                        <Text style={styles.resultName}>{shop.name}</Text>
+                        <Text style={styles.resultShop}>{shop.commune} - Note {shop.rating || 0}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {products.length > 0 && (
+                <View>
+                  <Text style={styles.sectionTitle}>Produits ({products.length})</Text>
+                  {products.map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.resultItem}
+                      onPress={() => navigation.navigate('Product', { product: item, shop: item.shop })}
+                    >
+                      <View style={styles.resultImg}>
+                        {item.images && item.images[0] ? (
+                          <Image source={{ uri: item.images[0] }} style={styles.resultRealImg} />
+                        ) : (
+                          <Text style={{ fontSize: 28 }}>📦</Text>
+                        )}
+                      </View>
+                      <View style={styles.resultInfo}>
+                        <Text style={styles.resultName}>{item.name}</Text>
+                        <Text style={styles.resultShop}>{item.shop?.name} - {item.shop?.commune}</Text>
+                      </View>
+                      <Text style={styles.resultPrice}>{item.price?.toLocaleString()} CDF</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {noResults && (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyEmoji}>🔍</Text>
+                  <Text style={styles.emptyText}>
+                    {search ? 'Aucun resultat pour "' + search + '"' : 'Aucun resultat pour cette categorie'}
+                  </Text>
+                </View>
+              )}
+
+              {!hasQuery && (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyEmoji}>🛍️</Text>
+                  <Text style={styles.emptyText}>Cherche un produit, une boutique, ou choisis une categorie</Text>
+                </View>
+              )}
             </View>
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.resultItem}
-              onPress={() => navigation.navigate('Product', { product: item, shop: item.shop })}
-            >
-              <View style={styles.resultImg}>
-                {item.images && item.images[0] ? (
-                  <Image source={{ uri: item.images[0] }} style={styles.resultRealImg} />
-                ) : (
-                  <Text style={{ fontSize: 28 }}>📦</Text>
-                )}
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName}>{item.name}</Text>
-                <Text style={styles.resultShop}>{item.shop?.name} · {item.shop?.commune}</Text>
-                {item.description ? (
-                  <Text style={styles.resultDesc} numberOfLines={1}>{item.description}</Text>
-                ) : null}
-              </View>
-              <Text style={styles.resultPrice}>{item.price?.toLocaleString()} CDF</Text>
-            </TouchableOpacity>
-          )}
+          renderItem={null}
+          contentContainerStyle={styles.list}
         />
       )}
     </View>
@@ -159,17 +217,16 @@ const styles = StyleSheet.create({
   catChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   catEmoji: { fontSize: 16 },
   catName: { fontSize: 12, color: colors.muted, fontWeight: '600' },
-  list: { padding: spacing.lg, gap: 10 },
-  resultsTitle: { fontSize: 13, color: colors.muted, marginBottom: spacing.sm },
-  resultItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 12 },
-  resultImg: { width: 60, height: 60, borderRadius: radius.lg, backgroundColor: colors.mid, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  list: { padding: spacing.lg },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: spacing.sm, marginTop: spacing.sm },
+  resultItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 12, marginBottom: 10 },
+  resultImg: { width: 56, height: 56, borderRadius: radius.lg, backgroundColor: colors.mid, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   resultRealImg: { width: '100%', height: '100%' },
   resultInfo: { flex: 1 },
   resultName: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 3 },
   resultShop: { fontSize: 11, color: colors.muted },
-  resultDesc: { fontSize: 11, color: colors.muted, marginTop: 2 },
-  resultPrice: { fontSize: 15, fontWeight: '800', color: colors.gold },
+  resultPrice: { fontSize: 14, fontWeight: '800', color: colors.gold },
   emptyBox: { alignItems: 'center', paddingTop: 60 },
   emptyEmoji: { fontSize: 50, marginBottom: spacing.md },
-  emptyText: { fontSize: 14, color: colors.muted },
+  emptyText: { fontSize: 13, color: colors.muted, textAlign: 'center', paddingHorizontal: spacing.xl },
 });

@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
+import { removeToken } from '../../services/api';
 
 const MENU_ITEMS = [
   { icon: 'person-outline',        label: 'Modifier mon profil',     color: colors.bright, route: 'EditProfile' },
@@ -23,14 +24,18 @@ export default function ProfileScreen({ navigation }) {
   const handleLogout = () => {
     Alert.alert('Deconnexion', 'Es-tu sur de vouloir te deconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Deconnexion', style: 'destructive', onPress: () => dispatch(logout()) },
+      {
+        text: 'Deconnexion',
+        style: 'destructive',
+        onPress: async () => {
+          await removeToken();
+          dispatch(logout());
+        },
+      },
     ]);
   };
 
   const handleMenuPress = (item) => {
-    // Le marchand a deja son propre ecran de notifications dans
-    // l onglet Dashboard (MerchantNotificationsScreen) ; pour lui,
-    // ce raccourci y redirige directement au lieu d en dupliquer un ici.
     if (item.route === 'Notifications' && role === 'MERCHANT') {
       const parent = navigation.getParent();
       if (parent) parent.navigate('Dashboard', { screen: 'Notifications' });
@@ -44,9 +49,13 @@ export default function ProfileScreen({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false}>
         <LinearGradient colors={[colors.deep, colors.navy]} style={styles.header}>
           <View style={styles.avatarWrap}>
-            <LinearGradient colors={[colors.accent, colors.bright]} style={styles.avatar}>
-              <Text style={styles.avatarText}>{user?.fullName?.[0]?.toUpperCase() || 'U'}</Text>
-            </LinearGradient>
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <LinearGradient colors={[colors.accent, colors.bright]} style={styles.avatar}>
+                <Text style={styles.avatarText}>{user?.fullName?.[0]?.toUpperCase() || 'U'}</Text>
+              </LinearGradient>
+            )}
           </View>
           <Text style={styles.userName}>{user?.fullName || 'Utilisateur'}</Text>
           <Text style={styles.userPhone}>{user?.phone || '+243 ...'}</Text>
@@ -83,7 +92,8 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy },
   header: { alignItems: 'center', paddingTop: 60, paddingBottom: spacing.xl },
-  avatarWrap: { marginBottom: spacing.md },
+  avatarWrap: { marginBottom: spacing.md, width: 90, height: 90 },
+  avatarImg: { width: 90, height: 90, borderRadius: 30 },
   avatar: { width: 90, height: 90, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 40, fontWeight: '900', color: '#fff' },
   userName: { fontSize: 22, fontWeight: '800', color: colors.text },
