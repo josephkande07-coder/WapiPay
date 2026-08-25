@@ -31,11 +31,12 @@ export default function MerchantRegisterScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   // Step 0 - Identite
-  const [fullName,  setFullName]  = useState('');
-  const [idNumber,  setIdNumber]  = useState('');
-  const [idType,    setIdType]    = useState('cni');
-  const [phone,     setPhone]     = useState('');
-  const [idDocUri,  setIdDocUri]  = useState(null);
+  const [fullName,     setFullName]     = useState('');
+  const [idNumber,     setIdNumber]     = useState('');
+  const [idType,       setIdType]       = useState('cni');
+  const [phone,        setPhone]        = useState('');
+  const [idDocUri,     setIdDocUri]     = useState(null);
+  const [idDocBase64,  setIdDocBase64]  = useState(null);
 
   // Step 1 - Boutique
   const [shopName,       setShopName]       = useState('');
@@ -50,6 +51,11 @@ export default function MerchantRegisterScreen({ navigation }) {
   const [plan, setPlan] = useState('pro');
 
   // ═══ Permissions et selection - piece d identite ═══
+  // CORRECTION : on demande maintenant base64:true, comme pour le
+  // logo boutique et les photos produits. Avant, la photo n etait
+  // capturee que localement (juste pour l apercu a l ecran) et
+  // n etait jamais envoyee au serveur - impossible pour l admin de
+  // la voir ou de verifier quoi que ce soit.
   const requestPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -76,9 +82,11 @@ export default function MerchantRegisterScreen({ navigation }) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 0.5,
+        base64: true,
       });
       if (!result.canceled && result.assets[0]) {
         setIdDocUri(result.assets[0].uri);
+        setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
       }
     } catch (e) {
       Alert.alert('Erreur', 'Impossible d ouvrir la galerie.');
@@ -92,9 +100,11 @@ export default function MerchantRegisterScreen({ navigation }) {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         quality: 0.5,
+        base64: true,
       });
       if (!result.canceled && result.assets[0]) {
         setIdDocUri(result.assets[0].uri);
+        setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
       }
     } catch (e) {
       Alert.alert('Erreur', 'Impossible d ouvrir la camera.');
@@ -170,33 +180,24 @@ export default function MerchantRegisterScreen({ navigation }) {
   const submitRegistration = async () => {
     setLoading(true);
     try {
-      // ═══ ETAPE 1 : creer le compte utilisateur ═══
-      // On ne peut pas creer une boutique (POST /shops) sans etre
-      // authentifie - il faut donc d abord un vrai compte + un token.
-      // PIN temporaire : le marchand doit le changer ensuite depuis
-      // Profil > Changer mon PIN (message affiche a la fin).
       const registerRes = await api.post('/auth/register', {
         phone:    '+243' + phone,
         fullName: fullName,
         pin:      '000000',
       });
-
-      // ═══ ETAPE 2 : sauvegarder le token correctement ═══
-      // saveToken() met a jour EN MEME TEMPS le token garde en memoire
-      // dans services/api.js et le stockage securise, pour que la
-      // requete suivante (creation de boutique) soit bien authentifiee.
       await saveToken(registerRes.token);
 
-      // ═══ ETAPE 3 : creer la boutique, maintenant authentifie ═══
+      // ═══ CORRECTION : idDocumentUrl envoye a la creation ═══
       await api.post('/shops', {
-        name:        shopName,
+        name:          shopName,
         description,
         category,
         address,
         commune,
-        idNational:  idNumber,
-        plan:        plan.toUpperCase(),
-        logoUrl:     shopLogoBase64,
+        idNational:    idNumber,
+        plan:          plan.toUpperCase(),
+        logoUrl:       shopLogoBase64,
+        idDocumentUrl: idDocBase64,
       });
 
       Alert.alert(
@@ -225,7 +226,6 @@ export default function MerchantRegisterScreen({ navigation }) {
           <Text style={styles.title}>Creer ma boutique</Text>
         </View>
 
-        {/* Indicateur etapes */}
         <View style={styles.stepsRow}>
           {STEPS.map((s, i) => (
             <React.Fragment key={i}>
@@ -245,7 +245,6 @@ export default function MerchantRegisterScreen({ navigation }) {
           ))}
         </View>
 
-        {/* STEP 0 - IDENTITE */}
         {step === 0 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Identite du commercant</Text>
@@ -321,7 +320,6 @@ export default function MerchantRegisterScreen({ navigation }) {
           </View>
         )}
 
-        {/* STEP 1 - BOUTIQUE */}
         {step === 1 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Informations de la boutique</Text>
@@ -378,7 +376,6 @@ export default function MerchantRegisterScreen({ navigation }) {
           </View>
         )}
 
-        {/* STEP 2 - PLAN */}
         {step === 2 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Choisir votre abonnement</Text>
@@ -421,7 +418,6 @@ export default function MerchantRegisterScreen({ navigation }) {
           </View>
         )}
 
-        {/* STEP 3 - PAIEMENT */}
         {step === 3 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Paiement d activation</Text>
