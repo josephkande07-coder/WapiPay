@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, TextInput, Alert,
@@ -24,21 +24,39 @@ const ID_TYPES = [
   { id: 'electeur',  label: 'Carte d electeur' },
 ];
 
-const STEPS = ['Identite','Boutique','Plan','Paiement'];
+// ═══ NOUVEAU : 2 etapes ajoutees (Verification, PIN) entre l identite
+// et les infos de boutique, pour que le marchand suive le meme parcours
+// de securite que l acheteur (OTP reel + PIN choisi par lui, plus de
+// verification contournee ni de PIN 000000 code en dur).
+const STEPS = ['Identite','Verification','PIN','Boutique','Plan','Paiement'];
+const PIN_LENGTH = 6;
 
 export default function MerchantRegisterScreen({ navigation }) {
   const [step,    setStep]    = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Step 0 - Identite
-  const [fullName,     setFullName]     = useState('');
-  const [idNumber,     setIdNumber]     = useState('');
-  const [idType,       setIdType]       = useState('cni');
-  const [phone,        setPhone]        = useState('');
-  const [idDocUri,     setIdDocUri]     = useState(null);
-  const [idDocBase64,  setIdDocBase64]  = useState(null);
+  const [fullName,  setFullName]  = useState('');
+  const [idNumber,  setIdNumber]  = useState('');
+  const [idType,    setIdType]    = useState('cni');
+  const [phone,     setPhone]     = useState('');
+  const [idDocUri,  setIdDocUri]  = useState(null);
+  const [idDocBase64, setIdDocBase64] = useState(null);
 
-  // Step 1 - Boutique
+  // Step 1 - Verification OTP
+  const [otpDigits,  setOtpDigits]  = useState(['','','','','','']);
+  const [otpToken,   setOtpToken]   = useState(null);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const otpInputs = useRef([]);
+
+  // Step 2 - PIN
+  const [pin,        setPin]        = useState('');
+  const [pinConfirm,  setPinConfirm] = useState('');
+  const [pinStep,     setPinStep]    = useState('create'); // 'create' | 'confirm'
+
+  // Step 3 - Boutique
   const [shopName,       setShopName]       = useState('');
   const [address,        setAddress]        = useState('');
   const [commune,        setCommune]        = useState('');
@@ -47,70 +65,50 @@ export default function MerchantRegisterScreen({ navigation }) {
   const [shopLogoUri,    setShopLogoUri]    = useState(null);
   const [shopLogoBase64, setShopLogoBase64] = useState(null);
 
-  // Step 2 - Plan
+  // Step 4 - Plan
   const [plan, setPlan] = useState('pro');
 
-  // ═══ Permissions et selection - piece d identite ═══
-  // CORRECTION : on demande maintenant base64:true, comme pour le
-  // logo boutique et les photos produits. Avant, la photo n etait
-  // capturee que localement (juste pour l apercu a l ecran) et
-  // n etait jamais envoyee au serveur - impossible pour l admin de
-  // la voir ou de verifier quoi que ce soit.
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const t = setTimeout(() => setResendTimer(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendTimer]);
+
+  // ═══ Piece d identite ═══
   const requestPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission refusee', 'Va dans les parametres de ton telephone et autorise WapiPay a acceder a ta galerie.');
+      Alert.alert('Permission refusee', 'Autorise WapiPay a acceder a ta galerie.');
       return false;
     }
     return true;
   };
-
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission refusee', 'Va dans les parametres de ton telephone et autorise WapiPay a utiliser la camera.');
+      Alert.alert('Permission refusee', 'Autorise WapiPay a utiliser la camera.');
       return false;
     }
     return true;
   };
-
   const pickFromGallery = async () => {
-    const hasPermission = await requestPermission();
-    if (!hasPermission) return;
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.5,
-        base64: true,
-      });
-      if (!result.canceled && result.assets[0]) {
-        setIdDocUri(result.assets[0].uri);
-        setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
-      }
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible d ouvrir la galerie.');
+    if (!(await requestPermission())) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.5, base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setIdDocUri(result.assets[0].uri);
+      setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
     }
   };
-
   const takePhoto = async () => {
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) return;
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.5,
-        base64: true,
-      });
-      if (!result.canceled && result.assets[0]) {
-        setIdDocUri(result.assets[0].uri);
-        setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
-      }
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible d ouvrir la camera.');
+    if (!(await requestCameraPermission())) return;
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5, base64: true });
+    if (!result.canceled && result.assets[0]) {
+      setIdDocUri(result.assets[0].uri);
+      setIdDocBase64('data:image/jpeg;base64,' + result.assets[0].base64);
     }
   };
-
   const showImageOptions = () => {
     Alert.alert('Ajouter une photo', 'Choisis une option', [
       { text: 'Prendre une photo', onPress: takePhoto },
@@ -127,29 +125,92 @@ export default function MerchantRegisterScreen({ navigation }) {
       { text: 'Annuler', style: 'cancel' },
     ]);
   };
-
   const launchShopLogoPicker = async (source) => {
-    const permissionFn = source === 'camera'
-      ? ImagePicker.requestCameraPermissionsAsync
-      : ImagePicker.requestMediaLibraryPermissionsAsync;
+    const permissionFn = source === 'camera' ? ImagePicker.requestCameraPermissionsAsync : ImagePicker.requestMediaLibraryPermissionsAsync;
     const { status } = await permissionFn();
     if (status !== 'granted') {
       Alert.alert('Permission refusee', 'Autorise WapiPay a acceder a ' + (source === 'camera' ? 'la camera' : 'ta galerie') + '.');
       return;
     }
     const launchFn = source === 'camera' ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
-    const result = await launchFn({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-      base64: true,
-    });
+    const result = await launchFn({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
     if (!result.canceled && result.assets[0]) {
       setShopLogoUri(result.assets[0].uri);
       setShopLogoBase64('data:image/jpeg;base64,' + result.assets[0].base64);
     }
   };
+
+  // ═══ OTP ═══
+  const sendOtpCode = async () => {
+    setSendingOtp(true);
+    try {
+      await api.post('/auth/send-otp', { phone: '+243' + phone });
+      setResendTimer(60);
+      setOtpDigits(['','','','','','']);
+    } catch (e) {
+      Alert.alert('Erreur', e?.error || 'Impossible d envoyer le code. Reessaie.');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 1 && !otpToken) sendOtpCode();
+  }, [step]);
+
+  const handleOtpChange = (text, index) => {
+    const digits = [...otpDigits];
+    digits[index] = text;
+    setOtpDigits(digits);
+    if (text && index < 5) otpInputs.current[index + 1]?.focus();
+    if (digits.every(d => d !== '')) verifyOtpCode(digits.join(''));
+  };
+  const handleOtpKeyPress = (e, index) => {
+    if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputs.current[index - 1]?.focus();
+    }
+  };
+  const verifyOtpCode = async (code) => {
+    setVerifyingOtp(true);
+    try {
+      const res = await api.post('/auth/verify-otp', { phone: '+243' + phone, otp: code });
+      setOtpToken(res.otpToken);
+      setTimeout(() => setStep(2), 300);
+    } catch (e) {
+      Alert.alert('Code incorrect', e?.error || 'Code OTP invalide. Reessaie.');
+      setOtpDigits(['','','','','','']);
+      otpInputs.current[0]?.focus();
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // ═══ PIN ═══
+  const handlePinKey = (key) => {
+    if (pinStep === 'create') {
+      if (key === 'del') { setPin(p => p.slice(0, -1)); return; }
+      if (pin.length >= PIN_LENGTH) return;
+      const newPin = pin + key;
+      setPin(newPin);
+      if (newPin.length === PIN_LENGTH) setTimeout(() => setPinStep('confirm'), 200);
+    } else {
+      if (key === 'del') { setPinConfirm(p => p.slice(0, -1)); return; }
+      if (pinConfirm.length >= PIN_LENGTH) return;
+      const newConfirm = pinConfirm + key;
+      setPinConfirm(newConfirm);
+      if (newConfirm.length === PIN_LENGTH) {
+        if (newConfirm === pin) {
+          setTimeout(() => setStep(3), 200);
+        } else {
+          Alert.alert('PIN incorrect', 'Les deux PIN ne correspondent pas. Reessaie.');
+          setPin('');
+          setPinConfirm('');
+          setPinStep('create');
+        }
+      }
+    }
+  };
+  const currentPinValue = pinStep === 'create' ? pin : pinConfirm;
 
   const validateStep = () => {
     if (step === 0) {
@@ -162,7 +223,15 @@ export default function MerchantRegisterScreen({ navigation }) {
         return false;
       }
     }
-    if (step === 1) {
+    if (step === 1 && !otpToken) {
+      Alert.alert('Verification requise', 'Entre le code recu par SMS avant de continuer.');
+      return false;
+    }
+    if (step === 2 && (pin.length !== PIN_LENGTH || pin !== pinConfirm)) {
+      Alert.alert('PIN requis', 'Cree et confirme ton PIN a 6 chiffres.');
+      return false;
+    }
+    if (step === 3) {
       if (!shopName || !address || !commune) {
         Alert.alert('Champs manquants', 'Nom, adresse et commune sont obligatoires.');
         return false;
@@ -181,28 +250,22 @@ export default function MerchantRegisterScreen({ navigation }) {
     setLoading(true);
     try {
       const registerRes = await api.post('/auth/register', {
-        phone:    '+243' + phone,
-        fullName: fullName,
-        pin:      '000000',
+        phone: '+243' + phone,
+        fullName,
+        pin,
+        otpToken,
       });
       await saveToken(registerRes.token);
 
-      // ═══ CORRECTION : idDocumentUrl envoye a la creation ═══
       await api.post('/shops', {
-        name:          shopName,
-        description,
-        category,
-        address,
-        commune,
-        idNational:    idNumber,
-        plan:          plan.toUpperCase(),
-        logoUrl:       shopLogoBase64,
-        idDocumentUrl: idDocBase64,
+        name: shopName, description, category, address, commune,
+        idNational: idNumber, plan: plan.toUpperCase(),
+        logoUrl: shopLogoBase64, idDocumentUrl: idDocBase64,
       });
 
       Alert.alert(
         'Boutique creee !',
-        'Votre boutique est en cours de verification sous 24h.\n\nConnectez-vous avec votre numero et le PIN temporaire : 000000\n\nPensez a le changer dans Profil > Changer mon PIN !',
+        'Votre boutique est en cours de verification sous 24h.\n\nConnectez-vous avec votre numero et votre PIN.',
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
     } catch (e) {
@@ -232,11 +295,10 @@ export default function MerchantRegisterScreen({ navigation }) {
               <View style={styles.stepItem}>
                 <View style={[styles.stepDot, i < step && styles.stepDone, i === step && styles.stepActive]}>
                   {i < step
-                    ? <Ionicons name="checkmark" size={14} color="#fff" />
+                    ? <Ionicons name="checkmark" size={12} color="#fff" />
                     : <Text style={[styles.stepNum, i === step && { color: '#000' }]}>{i + 1}</Text>
                   }
                 </View>
-                <Text style={[styles.stepLabel, i === step && { color: colors.gold }]}>{s}</Text>
               </View>
               {i < STEPS.length - 1 && (
                 <View style={[styles.stepLine, i < step && styles.stepLineDone]} />
@@ -244,7 +306,9 @@ export default function MerchantRegisterScreen({ navigation }) {
             </React.Fragment>
           ))}
         </View>
+        <Text style={styles.currentStepLabel}>{STEPS[step]}</Text>
 
+        {/* STEP 0 - IDENTITE */}
         {step === 0 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Identite du commercant</Text>
@@ -257,11 +321,7 @@ export default function MerchantRegisterScreen({ navigation }) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
                 {ID_TYPES.map(t => (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[styles.idTypeChip, idType === t.id && styles.idTypeChipActive]}
-                    onPress={() => setIdType(t.id)}
-                  >
+                  <TouchableOpacity key={t.id} style={[styles.idTypeChip, idType === t.id && styles.idTypeChipActive]} onPress={() => setIdType(t.id)}>
                     <Text style={[styles.idTypeText, idType === t.id && { color: '#fff' }]}>{t.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -276,12 +336,8 @@ export default function MerchantRegisterScreen({ navigation }) {
               <Text style={styles.prefix}>+243</Text>
               <TextInput
                 style={[styles.input, { flex: 1, borderWidth: 0, backgroundColor: 'transparent' }]}
-                placeholder="8X XXX XX XX"
-                placeholderTextColor={colors.muted}
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                maxLength={9}
+                placeholder="8X XXX XX XX" placeholderTextColor={colors.muted}
+                keyboardType="phone-pad" value={phone} onChangeText={setPhone} maxLength={9}
               />
             </View>
 
@@ -299,28 +355,92 @@ export default function MerchantRegisterScreen({ navigation }) {
                 <View style={styles.uploadEmpty}>
                   <Ionicons name="camera-outline" size={40} color={colors.muted} />
                   <Text style={styles.uploadText}>Appuyer pour ajouter une photo</Text>
-                  <View style={styles.uploadBtns}>
-                    <View style={styles.uploadBtnItem}>
-                      <Ionicons name="camera" size={16} color={colors.accent} />
-                      <Text style={styles.uploadBtnText}>Camera</Text>
-                    </View>
-                    <View style={styles.uploadBtnItem}>
-                      <Ionicons name="image" size={16} color={colors.bright} />
-                      <Text style={styles.uploadBtnText}>Galerie</Text>
-                    </View>
-                  </View>
                 </View>
               )}
             </TouchableOpacity>
+          </View>
+        )}
 
-            <View style={styles.infoBox}>
-              <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-              <Text style={styles.infoText}>Tes donnees sont chiffrees et ne seront jamais partagees avec des tiers.</Text>
+        {/* STEP 1 - OTP */}
+        {step === 1 && (
+          <View style={styles.formSection}>
+            <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
+              <Text style={{ fontSize: 40, marginBottom: spacing.md }}>📱</Text>
+              <Text style={styles.sectionTitle}>Verification du telephone</Text>
+              <Text style={styles.sectionSub}>
+                Code envoye au {'\n'}
+                <Text style={{ color: colors.accent, fontWeight: '700' }}>+243{phone}</Text>
+              </Text>
+            </View>
+
+            <View style={styles.otpRow}>
+              {otpDigits.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={r => otpInputs.current[index] = r}
+                  style={[styles.otpInput, digit && styles.otpInputFilled]}
+                  value={digit}
+                  onChangeText={t => handleOtpChange(t.slice(-1), index)}
+                  onKeyPress={e => handleOtpKeyPress(e, index)}
+                  keyboardType="numeric"
+                  maxLength={1}
+                  editable={!verifyingOtp}
+                />
+              ))}
+            </View>
+
+            {(sendingOtp || verifyingOtp) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: spacing.lg }}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
+                  {sendingOtp ? 'Envoi du code...' : 'Verification...'}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={{ alignItems: 'center' }} onPress={sendOtpCode} disabled={resendTimer > 0 || sendingOtp}>
+              <Text style={{ fontSize: 13, color: resendTimer > 0 ? colors.muted : colors.accent, fontWeight: '700' }}>
+                {resendTimer > 0 ? 'Renvoyer le code dans ' + resendTimer + 's' : 'Renvoyer le code'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* STEP 2 - PIN */}
+        {step === 2 && (
+          <View style={[styles.formSection, { alignItems: 'center' }]}>
+            <Ionicons name="lock-closed" size={36} color={colors.accent} style={{ marginBottom: spacing.md }} />
+            <Text style={styles.sectionTitle}>{pinStep === 'create' ? 'Creer ton PIN' : 'Confirmer ton PIN'}</Text>
+            <Text style={[styles.sectionSub, { textAlign: 'center' }]}>
+              {pinStep === 'create' ? 'Choisis un code a 6 chiffres pour securiser ton compte' : 'Retape ton PIN pour confirmer'}
+            </Text>
+
+            <View style={styles.pinDotsRow}>
+              {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+                <View key={i} style={[styles.pinDot, i < currentPinValue.length && styles.pinDotFilled]} />
+              ))}
+            </View>
+
+            <View style={styles.numpad}>
+              {['1','2','3','4','5','6','7','8','9','','0','del'].map((key, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.numKey, key === '' && styles.numKeyEmpty]}
+                  onPress={() => key && handlePinKey(key)}
+                  disabled={key === ''}
+                >
+                  {key === 'del'
+                    ? <Ionicons name="backspace-outline" size={20} color={colors.danger} />
+                    : <Text style={styles.numKeyText}>{key}</Text>
+                  }
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         )}
 
-        {step === 1 && (
+        {/* STEP 3 - BOUTIQUE */}
+        {step === 3 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Informations de la boutique</Text>
             <Text style={styles.sectionSub}>L adresse physique permet aux livreurs de recuperer vos colis.</Text>
@@ -350,11 +470,7 @@ export default function MerchantRegisterScreen({ navigation }) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
               <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
                 {COMMUNES.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[styles.idTypeChip, commune === c && styles.idTypeChipActive]}
-                    onPress={() => setCommune(c)}
-                  >
+                  <TouchableOpacity key={c} style={[styles.idTypeChip, commune === c && styles.idTypeChipActive]} onPress={() => setCommune(c)}>
                     <Text style={[styles.idTypeText, commune === c && { color: '#fff' }]}>{c}</Text>
                   </TouchableOpacity>
                 ))}
@@ -364,11 +480,7 @@ export default function MerchantRegisterScreen({ navigation }) {
             <Text style={styles.label}>Categorie</Text>
             <View style={styles.catGrid}>
               {['Mode','Tech','Alimentaire','Beaute','Maison','Sport','Autres'].map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.idTypeChip, category === cat && styles.idTypeChipActive]}
-                  onPress={() => setCategory(cat)}
-                >
+                <TouchableOpacity key={cat} style={[styles.idTypeChip, category === cat && styles.idTypeChipActive]} onPress={() => setCategory(cat)}>
                   <Text style={[styles.idTypeText, category === cat && { color: '#fff' }]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
@@ -376,7 +488,8 @@ export default function MerchantRegisterScreen({ navigation }) {
           </View>
         )}
 
-        {step === 2 && (
+        {/* STEP 4 - PLAN */}
+        {step === 4 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Choisir votre abonnement</Text>
             <Text style={styles.sectionSub}>Vous pouvez changer de plan a tout moment.</Text>
@@ -384,55 +497,38 @@ export default function MerchantRegisterScreen({ navigation }) {
             <TouchableOpacity style={[styles.planCard, plan === 'starter' && styles.planActive]} onPress={() => setPlan('starter')}>
               <View style={styles.planHeader}>
                 <Text style={styles.planName}>Starter</Text>
-                <View style={[styles.radio, plan === 'starter' && styles.radioActive]}>
-                  {plan === 'starter' && <View style={styles.radioDot} />}
-                </View>
+                <View style={[styles.radio, plan === 'starter' && styles.radioActive]}>{plan === 'starter' && <View style={styles.radioDot} />}</View>
               </View>
               <Text style={styles.planPrice}>$5<Text style={styles.planPer}>/mois</Text></Text>
               {['Jusqu a 50 produits','Support par email','Stats de base'].map(f => (
-                <View key={f} style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={colors.muted} />
-                  <Text style={styles.featureText}>{f}</Text>
-                </View>
+                <View key={f} style={styles.featureRow}><Ionicons name="checkmark-circle" size={14} color={colors.muted} /><Text style={styles.featureText}>{f}</Text></View>
               ))}
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.planCard, plan === 'pro' && styles.planActive, { borderColor: 'rgba(255,184,48,0.3)' }]} onPress={() => setPlan('pro')}>
-              <View style={styles.recommendedBadge}>
-                <Text style={styles.recommendedText}>RECOMMANDE</Text>
-              </View>
+              <View style={styles.recommendedBadge}><Text style={styles.recommendedText}>RECOMMANDE</Text></View>
               <View style={styles.planHeader}>
                 <Text style={[styles.planName, { color: colors.gold }]}>Pro</Text>
-                <View style={[styles.radio, plan === 'pro' && styles.radioActive]}>
-                  {plan === 'pro' && <View style={styles.radioDot} />}
-                </View>
+                <View style={[styles.radio, plan === 'pro' && styles.radioActive]}>{plan === 'pro' && <View style={styles.radioDot} />}</View>
               </View>
               <Text style={[styles.planPrice, { color: colors.gold }]}>$10<Text style={styles.planPer}>/mois</Text></Text>
               {['Produits illimites','Support prioritaire 24/7','Analytics avances','Badge verifie Premium'].map(f => (
-                <View key={f} style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={colors.gold} />
-                  <Text style={styles.featureText}>{f}</Text>
-                </View>
+                <View key={f} style={styles.featureRow}><Ionicons name="checkmark-circle" size={14} color={colors.gold} /><Text style={styles.featureText}>{f}</Text></View>
               ))}
             </TouchableOpacity>
           </View>
         )}
 
-        {step === 3 && (
+        {/* STEP 5 - PAIEMENT */}
+        {step === 5 && (
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Paiement d activation</Text>
             <Text style={styles.sectionSub}>Votre boutique sera activee sous 24h apres verification.</Text>
 
             <View style={styles.invoiceCard}>
               <Text style={styles.invoiceTitle}>Recapitulatif</Text>
-              <View style={styles.invoiceRow}>
-                <Text style={styles.invoiceLabel}>Frais d ouverture (uniques)</Text>
-                <Text style={styles.invoiceVal}>$15</Text>
-              </View>
-              <View style={styles.invoiceRow}>
-                <Text style={styles.invoiceLabel}>Abonnement {plan} (1er mois)</Text>
-                <Text style={styles.invoiceVal}>{plan === 'pro' ? '$10' : '$5'}</Text>
-              </View>
+              <View style={styles.invoiceRow}><Text style={styles.invoiceLabel}>Frais d ouverture (uniques)</Text><Text style={styles.invoiceVal}>$15</Text></View>
+              <View style={styles.invoiceRow}><Text style={styles.invoiceLabel}>Abonnement {plan} (1er mois)</Text><Text style={styles.invoiceVal}>{plan === 'pro' ? '$10' : '$5'}</Text></View>
               <View style={[styles.invoiceRow, { borderBottomWidth: 0, marginTop: 8 }]}>
                 <Text style={[styles.invoiceLabel, { fontWeight: '800', color: colors.text }]}>TOTAL</Text>
                 <Text style={[styles.invoiceVal, { color: colors.gold, fontSize: 20 }]}>{plan === 'pro' ? '$25' : '$20'}</Text>
@@ -440,11 +536,7 @@ export default function MerchantRegisterScreen({ navigation }) {
             </View>
 
             <Text style={styles.label}>Payer via Mobile Money</Text>
-            {[
-              { id: 'mpesa',  name: 'M-Pesa (Vodacom)' },
-              { id: 'airtel', name: 'Airtel Money' },
-              { id: 'orange', name: 'Orange Money' },
-            ].map(m => (
+            {[{ id: 'mpesa', name: 'M-Pesa (Vodacom)' }, { id: 'airtel', name: 'Airtel Money' }, { id: 'orange', name: 'Orange Money' }].map(m => (
               <TouchableOpacity key={m.id} style={styles.methodItem}>
                 <Text style={styles.methodName}>{m.name}</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.muted} />
@@ -453,16 +545,18 @@ export default function MerchantRegisterScreen({ navigation }) {
           </View>
         )}
 
-        <TouchableOpacity style={styles.nextBtnWrap} onPress={handleNext} disabled={loading}>
-          <LinearGradient colors={[colors.accent, colors.bright]} style={styles.nextBtn}>
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.nextBtnText}>
-                  {step < STEPS.length - 1 ? 'Continuer (' + (step + 1) + '/' + STEPS.length + ')' : 'Creer ma boutique'}
-                </Text>
-            }
-          </LinearGradient>
-        </TouchableOpacity>
+        {step !== 1 && step !== 2 && (
+          <TouchableOpacity style={styles.nextBtnWrap} onPress={handleNext} disabled={loading}>
+            <LinearGradient colors={[colors.accent, colors.bright]} style={styles.nextBtn}>
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.nextBtnText}>
+                    {step < STEPS.length - 1 ? 'Continuer (' + (step + 1) + '/' + STEPS.length + ')' : 'Creer ma boutique'}
+                  </Text>
+              }
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -472,21 +566,21 @@ export default function MerchantRegisterScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: spacing.lg, paddingTop: 52 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.xl },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.lg },
   back: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },
-  stepsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
-  stepItem: { alignItems: 'center', gap: 4 },
-  stepDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  stepsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  stepItem: { alignItems: 'center' },
+  stepDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   stepDone: { backgroundColor: colors.accent, borderColor: colors.accent },
   stepActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  stepNum: { fontSize: 12, fontWeight: '700', color: colors.muted },
-  stepLabel: { fontSize: 9, color: colors.muted, fontWeight: '600' },
-  stepLine: { flex: 1, height: 2, backgroundColor: colors.border, marginBottom: 14 },
+  stepNum: { fontSize: 10, fontWeight: '700', color: colors.muted },
+  stepLine: { flex: 1, height: 2, backgroundColor: colors.border },
   stepLineDone: { backgroundColor: colors.accent },
+  currentStepLabel: { fontSize: 11, color: colors.gold, fontWeight: '700', textAlign: 'center', marginBottom: spacing.xl },
   formSection: {},
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6 },
-  sectionSub: { fontSize: 12, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6, textAlign: 'center' },
+  sectionSub: { fontSize: 12, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg, textAlign: 'center' },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: 6, marginTop: spacing.md },
   input: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 13, color: colors.text, fontSize: 13 },
   phoneWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 14, height: 52 },
@@ -497,15 +591,20 @@ const styles = StyleSheet.create({
   uploadBox: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.border, borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing.md, backgroundColor: 'rgba(17,32,102,0.3)' },
   uploadEmpty: { padding: spacing.xl, alignItems: 'center', gap: 8 },
   uploadText: { fontSize: 13, color: colors.muted, textAlign: 'center' },
-  uploadBtns: { flexDirection: 'row', gap: 20, marginTop: 8 },
-  uploadBtnItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  uploadBtnText: { fontSize: 12, color: colors.muted, fontWeight: '600' },
   uploadDone: { height: 200, position: 'relative' },
   previewImg: { width: '100%', height: '100%' },
   changeOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, alignItems: 'center', gap: 4 },
   changeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  infoBox: { flexDirection: 'row', gap: 8, backgroundColor: 'rgba(0,229,160,0.08)', borderRadius: radius.lg, padding: 12, borderWidth: 1, borderColor: 'rgba(0,229,160,0.2)', marginTop: spacing.sm },
-  infoText: { flex: 1, fontSize: 12, color: colors.success, lineHeight: 18 },
+  otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: spacing.lg },
+  otpInput: { width: 42, height: 52, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, textAlign: 'center', fontSize: 20, fontWeight: '800', color: colors.text },
+  otpInputFilled: { borderColor: colors.accent, backgroundColor: 'rgba(26,58,255,0.1)' },
+  pinDotsRow: { flexDirection: 'row', gap: 14, marginVertical: spacing.xl },
+  pinDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: colors.border },
+  pinDotFilled: { backgroundColor: colors.accent, borderColor: colors.accent },
+  numpad: { flexDirection: 'row', flexWrap: 'wrap', width: '80%', gap: 12 },
+  numKey: { width: '28%', height: 54, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  numKeyEmpty: { backgroundColor: 'transparent', borderWidth: 0 },
+  numKeyText: { fontSize: 20, fontWeight: '700', color: colors.text },
   logoPickerBox: { width: 90, height: 90, borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing.md },
   logoPickerImg: { width: '100%', height: '100%' },
   logoPickerEmpty: { width: '100%', height: '100%', backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },

@@ -14,7 +14,7 @@ const PIN_LENGTH = 6;
 
 export default function SetPinScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const { phone, fullName } = route.params || {};
+  const { phone, fullName, otpToken } = route.params || {};
   const [pin,        setPin]        = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [step,       setStep]       = useState('create');
@@ -50,6 +50,7 @@ export default function SetPinScreen({ navigation, route }) {
               phone,
               fullName,
               pin: newConfirm,
+              otpToken,
             });
             // ═══ CORRECTION : saveToken() au lieu de SecureStore direct ═══
             await saveToken(response.token);

@@ -1,7 +1,16 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const BASE_URL = 'http://192.168.1.145:3000/api';
+const configuredBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '').trim().replace(/\/+$/, '');
+
+if (!configuredBaseUrl) {
+  throw new Error('EXPO_PUBLIC_API_BASE_URL doit etre configuree (par exemple https://api.example.com/api).');
+}
+if (!__DEV__ && !configuredBaseUrl.startsWith('https://')) {
+  throw new Error('L API mobile de production doit utiliser HTTPS.');
+}
+
+const BASE_URL = configuredBaseUrl;
 
 let authToken = null;
 

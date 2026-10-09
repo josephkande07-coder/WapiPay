@@ -28,7 +28,7 @@ export default function RegisterScreen({ navigation }) {
      await api.post('/auth/send-otp', { phone: '+243' + phone });
 navigation.navigate('OTP', { phone: '+243' + phone, fullName });
     } catch (e) {
-      Alert.alert('Erreur', 'Une erreur est survenue. Réessaie.');
+      Alert.alert('Erreur', e?.error || 'Impossible d envoyer le code. Reessaie.');
     } finally {
       setLoading(false);
     }

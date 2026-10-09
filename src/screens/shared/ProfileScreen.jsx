@@ -48,7 +48,8 @@ export default function ProfileScreen({ navigation }) {
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <LinearGradient colors={[colors.deep, colors.navy]} style={styles.header}>
-          <View style={styles.avatarWrap}>
+          {/* ═══ NOUVEAU : le rond photo est maintenant cliquable ═══ */}
+          <TouchableOpacity style={styles.avatarWrap} onPress={() => navigation.navigate('EditProfile')}>
             {user?.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
             ) : (
@@ -56,7 +57,10 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={styles.avatarText}>{user?.fullName?.[0]?.toUpperCase() || 'U'}</Text>
               </LinearGradient>
             )}
-          </View>
+            <View style={styles.avatarEditBadge}>
+              <Ionicons name="camera" size={13} color="#fff" />
+            </View>
+          </TouchableOpacity>
           <Text style={styles.userName}>{user?.fullName || 'Utilisateur'}</Text>
           <Text style={styles.userPhone}>{user?.phone || '+243 ...'}</Text>
           <View style={styles.verifiedRow}>
@@ -92,10 +96,11 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy },
   header: { alignItems: 'center', paddingTop: 60, paddingBottom: spacing.xl },
-  avatarWrap: { marginBottom: spacing.md, width: 90, height: 90 },
+  avatarWrap: { marginBottom: spacing.md, width: 90, height: 90, position: 'relative' },
   avatarImg: { width: 90, height: 90, borderRadius: 30 },
   avatar: { width: 90, height: 90, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 40, fontWeight: '900', color: '#fff' },
+  avatarEditBadge: { position: 'absolute', bottom: -2, right: -2, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.navy },
   userName: { fontSize: 22, fontWeight: '800', color: colors.text },
   userPhone: { fontSize: 14, color: colors.muted, marginTop: 4 },
   verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(0,229,160,0.1)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },

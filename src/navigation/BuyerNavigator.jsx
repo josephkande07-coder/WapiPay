@@ -35,6 +35,20 @@ function HomeStack() {
   );
 }
 
+// ═══ NOUVEAU ═══
+// L onglet Explorer n avait pas son propre stack : SearchScreen etait
+// une Tab.Screen "nue", sans aucun moyen d aller vers Shop ou Product
+// depuis un resultat de recherche. Meme logique que HomeStack.
+function ExplorerStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="SearchMain" component={SearchScreen} />
+      <Stack.Screen name="Shop"       component={ShopScreen} />
+      <Stack.Screen name="Product"    component={ProductScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function CartStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -55,21 +69,14 @@ function OrdersStack() {
   );
 }
 
-// Le profil a son propre stack : Modifier profil, Changer PIN, Notifications
-// et les pages d info menent maintenant vraiment quelque part.
 function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileMain"  component={ProfileScreen} />
-      <Stack.Screen name="EditProfile"  component={EditProfileScreen} />
-      <Stack.Screen name="ChangePin"    component={ChangePinScreen} />
-      <Stack.Screen name="Info"         component={InfoScreen} />
+      <Stack.Screen name="ProfileMain"   component={ProfileScreen} />
+      <Stack.Screen name="EditProfile"   component={EditProfileScreen} />
+      <Stack.Screen name="ChangePin"     component={ChangePinScreen} />
+      <Stack.Screen name="Info"          component={InfoScreen} />
       <Stack.Screen name="Notifications" component={BuyerNotificationsScreen} />
-      {/* On reutilise les ecrans deja presents dans OrdersStack :
-          en tapant une notification, on veut ouvrir CET ecran meme si
-          on est parti du Profil et non de l onglet Commandes.
-          Review est aussi enregistre ici car OrderTracking peut y mener
-          (bouton "Laisser un avis" pour une commande livree). */}
       <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
       <Stack.Screen name="Review"        component={ReviewScreen} />
     </Stack.Navigator>
@@ -106,7 +113,7 @@ export default function BuyerNavigator() {
       })}
     >
       <Tab.Screen name="Accueil"   component={HomeStack} />
-      <Tab.Screen name="Explorer"  component={SearchScreen} />
+      <Tab.Screen name="Explorer"  component={ExplorerStack} />
       <Tab.Screen
         name="Panier"
         component={CartStack}

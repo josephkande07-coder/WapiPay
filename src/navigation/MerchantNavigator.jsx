@@ -8,6 +8,7 @@ import DashboardScreen             from '../screens/merchant/DashboardScreen';
 import MyShopScreen                from '../screens/merchant/MyShopScreen';
 import AddProductScreen            from '../screens/merchant/AddProductScreen';
 import MerchantOrdersScreen        from '../screens/merchant/MerchantOrdersScreen';
+import MerchantOrderDetailScreen   from '../screens/merchant/MerchantOrderDetailScreen';
 import WithdrawScreen              from '../screens/merchant/WithdrawScreen';
 import MerchantNotificationsScreen from '../screens/merchant/MerchantNotificationsScreen';
 import ProfileScreen               from '../screens/shared/ProfileScreen';
@@ -24,6 +25,7 @@ function DashboardStack() {
       <Stack.Screen name="DashboardMain" component={DashboardScreen} />
       <Stack.Screen name="Withdraw"      component={WithdrawScreen} />
       <Stack.Screen name="Notifications" component={MerchantNotificationsScreen} />
+      <Stack.Screen name="OrderDetail"   component={MerchantOrderDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -33,6 +35,15 @@ function ShopStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MyShopMain" component={MyShopScreen} />
       <Stack.Screen name="AddProduct" component={AddProductScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function OrdersStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="OrdersMain"  component={MerchantOrdersScreen} />
+      <Stack.Screen name="OrderDetail" component={MerchantOrderDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -76,7 +87,7 @@ export default function MerchantNavigator() {
     >
       <Tab.Screen name="Dashboard"  component={DashboardStack} />
       <Tab.Screen name="Boutique"   component={ShopStack} />
-      <Tab.Screen name="Commandes"  component={MerchantOrdersScreen} />
+      <Tab.Screen name="Commandes"  component={OrdersStack} />
       <Tab.Screen name="Parametres" component={ProfileStack} />
     </Tab.Navigator>
   );

@@ -41,8 +41,20 @@ export default function LoginScreen({ navigation }) {
         token: response.token,
         user:  response.user,
       }));
-    } catch (e) {
-      Alert.alert('Erreur', e?.error || 'Numero ou PIN incorrect.');
+   } catch (e) {
+      // ═══ CORRECTION ═══
+      // Avant, toute erreur sans la forme attendue (ex: le serveur
+      // injoignable) affichait silencieusement "Numero ou PIN
+      // incorrect", meme quand le vrai probleme etait un souci
+      // reseau. Maintenant on distingue clairement les deux cas.
+      if (e?.error) {
+        Alert.alert('Erreur', e.error);
+      } else {
+        Alert.alert(
+          'Connexion impossible',
+          'Impossible de joindre le serveur WapiPay. Verifie ta connexion et l adresse configuree dans .env.'
+        );
+      }
     } finally {
       setLoading(false);
     }

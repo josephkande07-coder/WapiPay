@@ -6,12 +6,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
-import { useDispatch }     from 'react-redux';
-import { loginSuccess }    from '../../store/slices/authSlice';
 import { colors, radius, spacing } from '../../theme';
+import { authAPI } from '../../services/api';
 
 export default function OTPScreen({ navigation, route }) {
-  const dispatch = useDispatch();
   const { phone, fullName } = route.params || {};
   const [otp,     setOtp]     = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -46,12 +44,14 @@ export default function OTPScreen({ navigation, route }) {
   const verifyOTP = async (code) => {
     setLoading(true);
     try {
-      // TODO: appel API réel
-      await new Promise(r => setTimeout(r, 1500));
-      // Naviguer vers la création du PIN
-      navigation.navigate('SetPin', { phone, fullName, otp: code });
+      const result = await authAPI.verifyOTP(phone, code);
+      navigation.navigate('SetPin', {
+        phone: result.phone || phone,
+        fullName,
+        otpToken: result.otpToken,
+      });
     } catch (e) {
-      Alert.alert('Code incorrect', 'Le code OTP est invalide. Réessaie.');
+      Alert.alert('Code incorrect', e?.error || 'Le code OTP est invalide. Reessaie.');
       setOtp(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
     } finally {
@@ -61,8 +61,16 @@ export default function OTPScreen({ navigation, route }) {
 
   const resendOTP = async () => {
     if (timer > 0) return;
-    setTimer(60);
-    Alert.alert('Code envoyé !', `Un nouveau code a été envoyé au ${phone}`);
+    setLoading(true);
+    try {
+      await authAPI.sendOTP(phone);
+      setTimer(60);
+      Alert.alert('Code envoye', `Un nouveau code a ete envoye au ${phone}`);
+    } catch (e) {
+      Alert.alert('Erreur', e?.error || 'Impossible de renvoyer le code.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -11,6 +11,24 @@ import { productsAPI } from '../../services/api';
 
 const CATEGORIES = ['Mode','Tech','Alimentaire','Beaute','Maison','Sport','Autres'];
 
+const CLOTHING_SIZES = ['XS','S','M','L','XL','XXL','3XL'];
+const SHOE_SIZES = Array.from({ length: 27 }, (_, i) => String(20 + i)); // 20 a 46
+
+const COLOR_PALETTE = [
+  { name: 'Noir',   hex: '#111111' },
+  { name: 'Blanc',  hex: '#FFFFFF' },
+  { name: 'Gris',   hex: '#9E9E9E' },
+  { name: 'Rouge',  hex: '#FF4136' },
+  { name: 'Bleu',   hex: '#0074D9' },
+  { name: 'Vert',   hex: '#2ECC40' },
+  { name: 'Jaune',  hex: '#FFDC00' },
+  { name: 'Orange', hex: '#FF851B' },
+  { name: 'Rose',   hex: '#F012BE' },
+  { name: 'Violet', hex: '#6F42C1' },
+  { name: 'Marron', hex: '#8B4513' },
+  { name: 'Beige',  hex: '#D2B48C' },
+];
+
 export default function AddProductScreen({ navigation }) {
   const [name,        setName]        = useState('');
   const [price,       setPrice]       = useState('');
@@ -19,6 +37,24 @@ export default function AddProductScreen({ navigation }) {
   const [category,    setCategory]    = useState('');
   const [images,      setImages]      = useState([]);
   const [loading,     setLoading]     = useState(false);
+
+  // ═══ NOUVEAU : tailles et couleurs ═══
+  const [sizeType,       setSizeType]       = useState('none'); // 'none' | 'clothing' | 'shoes'
+  const [selectedSizes,  setSelectedSizes]  = useState([]);
+  const [selectedColors, setSelectedColors] = useState([]);
+
+  const toggleSize = (size) => {
+    setSelectedSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
+  };
+
+  const toggleColor = (colorName) => {
+    setSelectedColors(prev => prev.includes(colorName) ? prev.filter(c => c !== colorName) : [...prev, colorName]);
+  };
+
+  const handleSizeTypeChange = (type) => {
+    setSizeType(type);
+    setSelectedSizes([]); // on repart de zero si on change de type de taille
+  };
 
   const pickImage = async () => {
     if (images.length >= 4) {
@@ -39,10 +75,7 @@ export default function AddProductScreen({ navigation }) {
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setImages(prev => [...prev, {
-        uri:    asset.uri,
-        base64: 'data:image/jpeg;base64,' + asset.base64,
-      }]);
+      setImages(prev => [...prev, { uri: asset.uri, base64: 'data:image/jpeg;base64,' + asset.base64 }]);
     }
   };
 
@@ -64,10 +97,7 @@ export default function AddProductScreen({ navigation }) {
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setImages(prev => [...prev, {
-        uri:    asset.uri,
-        base64: 'data:image/jpeg;base64,' + asset.base64,
-      }]);
+      setImages(prev => [...prev, { uri: asset.uri, base64: 'data:image/jpeg;base64,' + asset.base64 }]);
     }
   };
 
@@ -90,7 +120,6 @@ export default function AddProductScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      // Appel reel au backend
       await productsAPI.create({
         name,
         description,
@@ -98,6 +127,8 @@ export default function AddProductScreen({ navigation }) {
         stock:    parseInt(stock),
         category,
         images:   images.map(img => img.base64),
+        sizes:    selectedSizes,
+        colors:   selectedColors,
       });
       Alert.alert('Produit ajoute !', '"' + name + '" est maintenant visible dans ta boutique.', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -108,6 +139,8 @@ export default function AddProductScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  const currentSizeList = sizeType === 'clothing' ? CLOTHING_SIZES : sizeType === 'shoes' ? SHOE_SIZES : [];
 
   return (
     <View style={styles.container}>
@@ -177,7 +210,7 @@ export default function AddProductScreen({ navigation }) {
           <Text style={styles.label}>Description</Text>
           <TextInput
             style={[styles.input, styles.textarea]}
-            placeholder="Decris ton produit : taille, couleur, matiere..."
+            placeholder="Decris ton produit : matiere, coupe, utilisation..."
             placeholderTextColor={colors.muted}
             value={description}
             onChangeText={setDescription}
@@ -195,6 +228,65 @@ export default function AddProductScreen({ navigation }) {
                 <Text style={[styles.catText, category === cat && { color: '#fff' }]}>{cat}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+
+          {/* ═══ NOUVEAU : Tailles ═══ */}
+          <Text style={styles.sectionTitle2}>Tailles disponibles (optionnel)</Text>
+          <Text style={styles.sectionSub}>Choisis le type de taille pour ce produit</Text>
+          <View style={styles.sizeTypeRow}>
+            {[
+              { key: 'none',     label: 'Aucune' },
+              { key: 'clothing', label: 'Vetements' },
+              { key: 'shoes',    label: 'Chaussures' },
+            ].map(t => (
+              <TouchableOpacity
+                key={t.key}
+                style={[styles.sizeTypeChip, sizeType === t.key && styles.sizeTypeChipActive]}
+                onPress={() => handleSizeTypeChange(t.key)}
+              >
+                <Text style={[styles.sizeTypeText, sizeType === t.key && { color: '#fff' }]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {currentSizeList.length > 0 && (
+            <View style={styles.sizesGrid}>
+              {currentSizeList.map(size => (
+                <TouchableOpacity
+                  key={size}
+                  style={[styles.sizeCircle, selectedSizes.includes(size) && styles.sizeCircleActive]}
+                  onPress={() => toggleSize(size)}
+                >
+                  <Text style={[styles.sizeCircleText, selectedSizes.includes(size) && { color: '#fff' }]}>
+                    {size}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* ═══ NOUVEAU : Couleurs ═══ */}
+          <Text style={styles.sectionTitle2}>Couleurs disponibles (optionnel)</Text>
+          <Text style={styles.sectionSub}>Selectionne les couleurs que tu as en stock</Text>
+          <View style={styles.colorsGrid}>
+            {COLOR_PALETTE.map(c => {
+              const isSelected = selectedColors.includes(c.name);
+              return (
+                <TouchableOpacity key={c.name} style={styles.colorItem} onPress={() => toggleColor(c.name)}>
+                  <View style={[
+                    styles.colorSwatch,
+                    { backgroundColor: c.hex },
+                    isSelected && styles.colorSwatchActive,
+                    c.hex === '#FFFFFF' && styles.colorSwatchWhiteBorder,
+                  ]}>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={16} color={c.hex === '#FFFFFF' || c.hex === '#FFDC00' ? '#000' : '#fff'} />
+                    )}
+                  </View>
+                  <Text style={styles.colorLabel}>{c.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
         <View style={{ height: 100 }} />
@@ -221,6 +313,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
   form: { padding: spacing.lg },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  sectionTitle2: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4, marginTop: spacing.xl },
   sectionSub: { fontSize: 12, color: colors.muted, marginBottom: spacing.md },
   imagesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.lg },
   imageWrap: { width: 90, height: 90, borderRadius: radius.lg, overflow: 'hidden', position: 'relative' },
@@ -237,6 +330,20 @@ const styles = StyleSheet.create({
   catChip: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 20 },
   catChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   catText: { fontSize: 12, color: colors.muted, fontWeight: '600' },
+  sizeTypeRow: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
+  sizeTypeChip: { flex: 1, paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: 'center' },
+  sizeTypeChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  sizeTypeText: { fontSize: 12, color: colors.muted, fontWeight: '600' },
+  sizesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.md },
+  sizeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  sizeCircleActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  sizeCircleText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  colorsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: spacing.md },
+  colorItem: { alignItems: 'center', gap: 5, width: 56 },
+  colorSwatch: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'transparent' },
+  colorSwatchActive: { borderColor: colors.accent, borderWidth: 2.5 },
+  colorSwatchWhiteBorder: { borderColor: colors.border },
+  colorLabel: { fontSize: 9, color: colors.muted, textAlign: 'center' },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.lg, backgroundColor: colors.navy, borderTopWidth: 1, borderTopColor: colors.border },
   submitBtn: { borderRadius: radius.lg, overflow: 'hidden' },
   submitGrad: { alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },

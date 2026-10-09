@@ -28,6 +28,7 @@ export default function PaymentScreen({ navigation, route }) {
   const [pin,            setPin]            = useState('');
   const [step,           setStep]           = useState('method');
   const [loading,        setLoading]        = useState(false);
+  const [transactionId,  setTransactionId]  = useState(null);
 
   const shakeAnim    = useRef(new Animated.Value(0)).current;
   const successScale = useRef(new Animated.Value(0)).current;
@@ -49,24 +50,56 @@ export default function PaymentScreen({ navigation, route }) {
     if (newPin.length === PIN_LENGTH) submitPayment(newPin);
   };
 
+const completePayment = () => {
+    setStep('success');
+    dispatch(clearCart());
+    Animated.spring(successScale, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }).start();
+  };
+
   const submitPayment = async (finalPin) => {
+    if (!order?.id || !user?.phone) {
+      Alert.alert('Paiement indisponible', 'La commande ou le numero de telephone est manquant.');
+      return;
+    }
+
     setLoading(true);
     setStep('processing');
     try {
-      await paymentsAPI.initiate({
-        orderId:       order.id,
+      const response = await paymentsAPI.initiate({
+        orderId: order.id,
         paymentMethod: selectedMethod,
-        phoneNumber:   user?.phone || '+243000000000',
-        pin:           finalPin,
+        phoneNumber: user.phone,
+        pin: finalPin,
       });
-      setStep('success');
-      dispatch(clearCart());
-      Animated.spring(successScale, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }).start();
+      setTransactionId(response.transaction?.id || null);
+      setStep('pending');
     } catch (e) {
       setPin('');
       setStep('pin');
       shake();
-      Alert.alert('Paiement echoue', e?.error || 'PIN incorrect ou solde insuffisant.');
+      Alert.alert('Paiement non lance', e?.error || 'Impossible d envoyer la demande de paiement.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkPaymentStatus = async () => {
+    if (!transactionId) return;
+    setLoading(true);
+    try {
+      const response = await paymentsAPI.getStatus(transactionId);
+      const status = response.transaction?.status;
+      if (status === 'SUCCESS') {
+        completePayment();
+      } else if (status === 'FAILED') {
+        setPin('');
+        setStep('pin');
+        Alert.alert('Paiement refuse', 'Le fournisseur a refuse ou annule ce paiement.');
+      } else {
+        Alert.alert('Toujours en attente', 'Confirme le paiement sur ton telephone puis reessaie dans quelques secondes.');
+      }
+    } catch (e) {
+      Alert.alert('Verification impossible', e?.error || 'Impossible de verifier le statut du paiement.');
     } finally {
       setLoading(false);
     }
@@ -109,6 +142,29 @@ export default function PaymentScreen({ navigation, route }) {
     );
   }
 
+  if (step === 'pending') {
+    return (
+      <LinearGradient colors={[colors.deep, colors.navy]} style={styles.successContainer}>
+        <View style={styles.securityNote}>
+          <Ionicons name="time-outline" size={18} color={colors.gold} />
+          <Text style={styles.securityText}>Paiement en attente de confirmation</Text>
+        </View>
+        <Text style={[styles.successTitle, { marginTop: 24 }]}>Confirme sur ton telephone</Text>
+        <Text style={styles.successSub}>
+          Une demande a ete envoyee a {user?.phone}.{'\n'}
+          WapiPay confirmera la commande uniquement apres le retour securise du fournisseur.
+        </Text>
+        <TouchableOpacity style={styles.successBtn} onPress={checkPaymentStatus} disabled={loading}>
+          <LinearGradient colors={[colors.accent, colors.bright]} style={styles.btnGrad}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Verifier mon paiement</Text>}
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={goToOrders} style={{ marginTop: 16 }}>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Verifier plus tard dans mes commandes</Text>
+        </TouchableOpacity>
+      </LinearGradient>
+    );
+  }
   if (step === 'processing') {
     return (
       <LinearGradient colors={[colors.deep, colors.navy]} style={styles.successContainer}>

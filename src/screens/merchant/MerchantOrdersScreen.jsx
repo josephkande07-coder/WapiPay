@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
+  TouchableOpacity, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons }        from '@expo/vector-icons';
@@ -24,9 +24,7 @@ export default function MerchantOrdersScreen({ navigation }) {
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [activeTab,   setActiveTab]   = useState('Tous');
-  const [updatingId,  setUpdatingId]  = useState(null);
 
-  // ═══ CORRECTION ═══ recharge a chaque fois que l onglet reprend le focus
   useEffect(() => {
     loadOrders();
     const unsubscribe = navigation.addListener('focus', loadOrders);
@@ -50,25 +48,6 @@ export default function MerchantOrdersScreen({ navigation }) {
     await loadOrders();
     setRefreshing(false);
   }, []);
-
-  const handleUpdateStatus = async (orderId, newStatus) => {
-    setUpdatingId(orderId);
-    try {
-      await ordersAPI.updateStatus(orderId, newStatus);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible de mettre a jour le statut.');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const confirmOrder = (orderId) => {
-    Alert.alert('Confirmer la commande', 'Confirmer cette commande ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Confirmer', onPress: () => handleUpdateStatus(orderId, 'CONFIRMED') },
-    ]);
-  };
 
   const filtered = orders.filter(o => {
     if (activeTab === 'Tous') return true;
@@ -133,73 +112,31 @@ export default function MerchantOrdersScreen({ navigation }) {
           renderItem={({ item }) => {
             const s = STATUS[item.status] || STATUS.PENDING;
             return (
-              <View style={styles.orderCard}>
+              <TouchableOpacity
+                style={styles.orderCard}
+                onPress={() => navigation.navigate('OrderDetail', { orderId: item.id })}
+              >
                 <View style={styles.orderTop}>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.orderId}>#{item.id.slice(-6).toUpperCase()}</Text>
                     <Text style={styles.orderProduct}>{getProductName(item)}</Text>
                     <Text style={styles.orderClient}>{item.buyer?.fullName}</Text>
-                    <Text style={styles.orderPhone}>{item.buyer?.phone}</Text>
-                    <Text style={styles.orderAddress}>{item.deliveryAddress}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
                     <Text style={styles.orderAmount}>{item.totalAmount?.toLocaleString()} CDF</Text>
                     <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
                       <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
                     </View>
-                    <Text style={styles.orderDate}>{new Date(item.createdAt).toLocaleDateString('fr-FR')}</Text>
                   </View>
                 </View>
-
-                {item.status === 'PENDING' && (
-                  <TouchableOpacity
-                    style={styles.confirmBtn}
-                    onPress={() => confirmOrder(item.id)}
-                    disabled={updatingId === item.id}
-                  >
-                    {updatingId === item.id
-                      ? <ActivityIndicator color={colors.success} size="small" />
-                      : <Text style={styles.confirmBtnText}>Confirmer la commande</Text>
-                    }
-                  </TouchableOpacity>
-                )}
-                {item.status === 'CONFIRMED' && (
-                  <TouchableOpacity
-                    style={[styles.confirmBtn, { borderColor: 'rgba(255,184,48,0.3)', backgroundColor: 'rgba(255,184,48,0.08)' }]}
-                    onPress={() => handleUpdateStatus(item.id, 'PICKUP')}
-                    disabled={updatingId === item.id}
-                  >
-                    {updatingId === item.id
-                      ? <ActivityIndicator color={colors.gold} size="small" />
-                      : <Text style={[styles.confirmBtnText, { color: colors.gold }]}>Marquer en recuperation</Text>
-                    }
-                  </TouchableOpacity>
-                )}
-                {item.status === 'PICKUP' && (
-                  <TouchableOpacity
-                    style={[styles.confirmBtn, { borderColor: 'rgba(255,184,48,0.3)', backgroundColor: 'rgba(255,184,48,0.08)' }]}
-                    onPress={() => handleUpdateStatus(item.id, 'IN_DELIVERY')}
-                    disabled={updatingId === item.id}
-                  >
-                    {updatingId === item.id
-                      ? <ActivityIndicator color={colors.gold} size="small" />
-                      : <Text style={[styles.confirmBtnText, { color: colors.gold }]}>Marquer en livraison</Text>
-                    }
-                  </TouchableOpacity>
-                )}
-                {item.status === 'IN_DELIVERY' && (
-                  <TouchableOpacity
-                    style={[styles.confirmBtn, { borderColor: 'rgba(0,229,160,0.3)' }]}
-                    onPress={() => handleUpdateStatus(item.id, 'DELIVERED')}
-                    disabled={updatingId === item.id}
-                  >
-                    {updatingId === item.id
-                      ? <ActivityIndicator color={colors.success} size="small" />
-                      : <Text style={styles.confirmBtnText}>Marquer comme livre</Text>
-                    }
-                  </TouchableOpacity>
-                )}
-              </View>
+                <View style={styles.cardFooter}>
+                  <Text style={styles.orderDate}>{new Date(item.createdAt).toLocaleDateString('fr-FR')}</Text>
+                  <View style={styles.viewDetailRow}>
+                    <Text style={styles.viewDetailText}>Voir les details</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+                  </View>
+                </View>
+              </TouchableOpacity>
             );
           }}
         />
@@ -226,14 +163,13 @@ const styles = StyleSheet.create({
   orderId: { fontSize: 11, fontWeight: '700', color: colors.accent, marginBottom: 3 },
   orderProduct: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 3 },
   orderClient: { fontSize: 12, color: colors.muted },
-  orderPhone: { fontSize: 11, color: colors.muted, marginTop: 2 },
-  orderAddress: { fontSize: 11, color: colors.muted, marginTop: 2, maxWidth: 180 },
   orderAmount: { fontSize: 16, fontWeight: '800', color: colors.gold },
   statusBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   statusText: { fontSize: 10, fontWeight: '700' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: 'rgba(77,110,255,0.08)' },
   orderDate: { fontSize: 10, color: colors.muted },
-  confirmBtn: { marginTop: spacing.md, padding: 10, backgroundColor: 'rgba(0,229,160,0.1)', borderRadius: radius.lg, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,229,160,0.3)' },
-  confirmBtnText: { fontSize: 13, color: colors.success, fontWeight: '700' },
+  viewDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  viewDetailText: { fontSize: 11, color: colors.accent, fontWeight: '700' },
   emptyBox: { alignItems: 'center', paddingTop: 80 },
   emptyEmoji: { fontSize: 60, marginBottom: spacing.lg },
   emptyText: { fontSize: 15, color: colors.muted },

@@ -41,9 +41,7 @@ export default function MerchantNotificationsScreen({ navigation }) {
     try {
       setLoading(true);
       const res = await ordersAPI.getShopOrders();
-      const sorted = (res.orders || []).slice().sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      );
+      const sorted = (res.orders || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setOrders(sorted);
     } catch (e) {
       console.log('Erreur notifications:', e);
@@ -67,17 +65,9 @@ export default function MerchantNotificationsScreen({ navigation }) {
     return (first.product?.name || 'Produit') + ' x' + first.quantity;
   };
 
-  // ═══ REDIRECTION ═══
-  // Il n existe pas encore d ecran de detail de commande cote marchand,
-  // donc on ouvre l onglet "Commandes" (liste complete filtrable) en
-  // remontant au navigateur parent - c est l ecran le plus pertinent
-  // disponible aujourd hui pour retrouver cette commande precise.
   const handlePress = (order) => {
     setReadIds(prev => [...prev, order.id]);
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.navigate('Commandes');
-    }
+    navigation.navigate('OrderDetail', { orderId: order.id });
   };
 
   return (
@@ -129,7 +119,6 @@ export default function MerchantNotificationsScreen({ navigation }) {
             <View style={styles.emptyBox}>
               <Text style={styles.emptyEmoji}>🔔</Text>
               <Text style={styles.emptyText}>Aucune notification pour l instant</Text>
-              <Text style={styles.emptyHint}>Les notifications apparaitront a chaque nouvelle commande</Text>
             </View>
           }
         />
@@ -157,5 +146,4 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: 'center', paddingTop: 80 },
   emptyEmoji: { fontSize: 50, marginBottom: spacing.md },
   emptyText: { fontSize: 15, color: colors.muted },
-  emptyHint: { fontSize: 12, color: colors.muted, marginTop: 6, textAlign: 'center', paddingHorizontal: spacing.xl },
 });

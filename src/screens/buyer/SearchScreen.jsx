@@ -24,8 +24,6 @@ export default function SearchScreen({ navigation, route }) {
   const [loading,        setLoading]        = useState(false);
   const [activeCategory, setActiveCategory] = useState(route.params?.initialCategory || null);
 
-  // Reagit quand HomeScreen renvoie ici avec une nouvelle requete
-  // ou une nouvelle categorie (navigation.navigate('Explorer', {...}))
   useEffect(() => {
     if (route.params?.initialQuery !== undefined) {
       setSearch(route.params.initialQuery);
@@ -42,11 +40,6 @@ export default function SearchScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [search, activeCategory]);
 
-  // ═══ CORRECTION ═══
-  // Avant, cet ecran ne cherchait que dans les produits (productsAPI.search)
-  // alors que le champ dit "produits, boutiques". Une recherche par NOM
-  // DE BOUTIQUE ne renvoyait donc jamais rien. On interroge maintenant
-  // les deux en parallele.
   const runSearch = async (q, category) => {
     try {
       setLoading(true);
@@ -75,6 +68,19 @@ export default function SearchScreen({ navigation, route }) {
 
   const handleCategory = (catName) => {
     setActiveCategory(prev => prev === catName ? null : catName);
+  };
+
+  // ═══ CORRECTION ═══
+  // Avant, taper sur une boutique naviguait vers 'HomeMain', un ecran
+  // qui n existe pas dans cet onglet (Explorer n avait pas son propre
+  // stack de navigation). Maintenant on va vers 'Shop', enregistre
+  // dans le nouveau ExplorerStack.
+  const goToShop = (shop) => {
+    navigation.navigate('Shop', { shop });
+  };
+
+  const goToProduct = (product) => {
+    navigation.navigate('Product', { product, shop: product.shop });
   };
 
   const hasQuery = !!search || !!activeCategory;
@@ -136,7 +142,7 @@ export default function SearchScreen({ navigation, route }) {
                     <TouchableOpacity
                       key={shop.id}
                       style={styles.resultItem}
-                      onPress={() => navigation.navigate('HomeMain')}
+                      onPress={() => goToShop(shop)}
                     >
                       <View style={styles.resultImg}>
                         {shop.logoUrl ? (
@@ -162,7 +168,7 @@ export default function SearchScreen({ navigation, route }) {
                     <TouchableOpacity
                       key={item.id}
                       style={styles.resultItem}
-                      onPress={() => navigation.navigate('Product', { product: item, shop: item.shop })}
+                      onPress={() => goToProduct(item)}
                     >
                       <View style={styles.resultImg}>
                         {item.images && item.images[0] ? (

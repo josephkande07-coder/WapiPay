@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
@@ -8,22 +8,22 @@ import { colors, radius, spacing } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const COLOR_HEX = {
+  Noir: '#111111', Blanc: '#FFFFFF', Gris: '#9E9E9E', Rouge: '#FF4136',
+  Bleu: '#0074D9', Vert: '#2ECC40', Jaune: '#FFDC00', Orange: '#FF851B',
+  Rose: '#F012BE', Violet: '#6F42C1', Marron: '#8B4513', Beige: '#D2B48C',
+};
+
 export default function ProductScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const { product, shop } = route.params || {
-    product: { id: '1', name: 'Produit', price: 0, images: [], stock: 0 },
+    product: { id: '1', name: 'Produit', price: 0, images: [], stock: 0, sizes: [], colors: [] },
     shop: { id: '1', name: 'Boutique', commune: '' },
   };
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
 
-  // ═══ CORRECTION ═══
-  // Cet ecran attendait encore product.emoji, un champ qui n existe
-  // plus depuis qu on est connecte au vrai backend (les produits ont
-  // maintenant un tableau product.images avec de vraies photos).
-  // On affiche maintenant un vrai carrousel photo, avec un repli
-  // propre si le produit n a aucune photo.
   const images = product.images && product.images.length > 0 ? product.images : [];
 
   const handleAddToCart = () => {
@@ -84,6 +84,35 @@ export default function ProductScreen({ navigation, route }) {
           {product.description ? (
             <Text style={styles.description}>{product.description}</Text>
           ) : null}
+
+          {/* Tailles disponibles */}
+          {product.sizes && product.sizes.length > 0 && (
+            <View style={{ marginBottom: spacing.lg }}>
+              <Text style={styles.variantLabel}>Tailles disponibles</Text>
+              <View style={styles.sizesRow}>
+                {product.sizes.map(size => (
+                  <View key={size} style={styles.sizeCircle}>
+                    <Text style={styles.sizeCircleText}>{size}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Couleurs disponibles */}
+          {product.colors && product.colors.length > 0 && (
+            <View style={{ marginBottom: spacing.lg }}>
+              <Text style={styles.variantLabel}>Couleurs disponibles</Text>
+              <View style={styles.colorsRow}>
+                {product.colors.map(colorName => (
+                  <View key={colorName} style={styles.colorChip}>
+                    <View style={[styles.colorDot, { backgroundColor: COLOR_HEX[colorName] || '#888' }]} />
+                    <Text style={styles.colorChipText}>{colorName}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Boutique */}
           <TouchableOpacity style={styles.shopRow} onPress={() => navigation.navigate('Shop', { shop })}>
@@ -166,6 +195,14 @@ const styles = StyleSheet.create({
   productName: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 8 },
   productPrice: { fontSize: 28, fontWeight: '900', color: colors.gold, marginBottom: spacing.md },
   description: { fontSize: 13, color: colors.muted, lineHeight: 20, marginBottom: spacing.lg },
+  variantLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 10 },
+  sizesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  sizeCircle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  sizeCircleText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  colorsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  colorChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
+  colorDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  colorChipText: { fontSize: 11, color: colors.text, fontWeight: '600' },
   shopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: 14, marginBottom: spacing.lg },
   shopIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.mid, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   shopLogoImg: { width: '100%', height: '100%' },
